@@ -1,0 +1,257 @@
+// ============================================================================
+// Calnan Relationship CRM — Frozen Foundation Schema (DO NOT “improve”)
+// ============================================================================
+// IMPORTANT RULES (NON-NEGOTIABLE):
+// 1) DO NOT add Deals / Opportunities / Pipelines entities.
+// 2) DO NOT auto-move stages based on emails, tasks, calendar, or time.
+// 3) Contacts are the center of the system. Pipeline is contact-centric.
+// 4) Proposal stages REQUIRE a proposal owner (user) and visible tracking.
+// 5) NextTouchAt is required for "active" stages (enforced at app layer).
+// 6) Email/calendar ingestion is Phase 2; v1 supports manual activity + stubs.
+//
+// If you are an AI tool generating code: YOU MUST NOT modify this schema.
+// Build UI and logic around it.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ContactType {
+  INVESTOR_CASH
+  ROLL_IN_OWNER
+  REALTOR
+  PROFESSIONAL
+  PARTNER
+  INTERNAL
+}
+
+enum RelationshipStage {
+  // Lead & intro
+  NEW_LEAD
+  FIRST_OUTREACH_SENT
+  CONNECTED_CONVERSATION
+
+  // Qualification
+  QUESTIONNAIRE_SENT
+  QUESTIONNAIRE_RECEIVED
+  QUALIFIED_ACTIVE
+
+  // Proposal workflow (core for roll-ins)
+  PROPOSAL_TO_BE_DEVELOPED
+  PROPOSAL_IN_PROGRESS
+  PROPOSAL_READY_FOR_FORMATTING
+  PROPOSAL_SENT
+
+  // Commitment & conversion
+  ACTIVE_NEGOTIATION
+  SOFT_COMMITTED
+  CLOSED_CONVERTED
+
+  // Cooling
+  DORMANT
+  LOST
+}
+
+enum VehicleFlag {
+  CORE
+  CAST3
+}
+
+enum CapitalPotentialBand {
+  UNDER_100K
+  BAND_100K_250K
+  BAND_250K_500K
+  BAND_500K_1M
+  BAND_1M_2M
+  BAND_2M_5M
+  BAND_5M_PLUS
+  BAND_10M_PLUS
+  UNKNOWN
+}
+
+enum EquityRollInBand {
+  UNDER_250K
+  BAND_250K_500K
+  BAND_500K_1M
+  BAND_1M_2M
+  BAND_2M_5M
+  BAND_5M_PLUS
+  BAND_10M_PLUS
+  UNKNOWN
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ActivityType {
+  NOTE
+  CALL
+  MEETING
+  EMAIL_LOGGED
+  TEXT_LOGGED
+  DOCUMENT_SENT
+  DOCUMENT_RECEIVED
+  STATUS_CHANGE
+  TASK_CREATED
+  TASK_COMPLETED
+}
+
+model User {
+  id            String   @id @default(cuid())
+  // Graph identity fields (mirror patterns from email assistant repo)
+  email         String   @unique
+  displayName   String?
+  graphUserId   String?  @unique
+  isActive      Boolean  @default(true)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relationships
+  ownedContacts Contact[] @relation("OwnerUser")
+  proposalContacts Contact[] @relation("ProposalOwnerUser")
+  tasksAssigned Task[] @relation("AssignedUser")
+  activitiesLogged Activity[] @relation("ActorUser")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  website     String?
+  notes       String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  contacts    Contact[]
+}
+
+model Contact {
+  id                 String   @id @default(cuid())
+
+  // Identity
+  firstName           String?
+  lastName            String?
+  displayName         String?
+  email               String?
+  phone               String?
+  city                String?
+  region              String?  // e.g., AB, BC, SK
+  country             String?  @default("Canada")
+
+  // Classification
+  types               ContactType[]
+  vehicle             VehicleFlag @default(CORE)
+
+  // Relationship operating system
+  stage               RelationshipStage @default(NEW_LEAD)
+  stageUpdatedAt      DateTime @default(now())
+
+  ownerUserId         String?
+  owner               User? @relation("OwnerUser", fields: [ownerUserId], references: [id])
+
+  // Proposal ownership (required for proposal stages, enforced in app layer)
+  proposalOwnerUserId String?
+  proposalOwner       User? @relation("ProposalOwnerUser", fields: [proposalOwnerUserId], references: [id])
+
+  // Momentum discipline (required for active stages, enforced in app layer)
+  nextTouchAt         DateTime?
+  lastTouchAt         DateTime?
+
+  // Investor / roll-in specific bands
+  capitalPotential    CapitalPotentialBand @default(UNKNOWN)
+  equityRollInPotential EquityRollInBand   @default(UNKNOWN)
+
+  // Roll-in property info (free text intentionally)
+  rollInPropertyLocation String?
+
+  // Notes
+  howWeMet            String?
+  notes               String?
+
+  // Org link
+  organizationId      String?
+  organization        Organization? @relation(fields: [organizationId], references: [id])
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Relationships
+  tasks               Task[]
+  activities          Activity[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([stage])
+  @@index([ownerUserId])
+  @@index([vehicle])
+}
+
+model Task {
+  id            String      @id @default(cuid())
+  title         String
+  description   String?
+  status        TaskStatus  @default(OPEN)
+  priority      TaskPriority @default(MEDIUM)
+
+  dueAt         DateTime?
+  completedAt   DateTime?
+
+  // Assignment
+  assignedToUserId String?
+  assignedTo       User? @relation("AssignedUser", fields: [assignedToUserId], references: [id])
+
+  // Linkage
+  contactId     String
+  contact       Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([dueAt])
+  @@index([assignedToUserId])
+  @@index([contactId])
+}
+
+model Activity {
+  id            String       @id @default(cuid())
+  type          ActivityType
+  occurredAt    DateTime     @default(now())
+  subject       String?
+  body          String?
+
+  // For logged emails/calendar later (stubs)
+  externalId    String?      // message id / event id etc.
+  source        String?      // "manual", "bcc", "calendar", etc.
+
+  // Linkage
+  contactId     String
+  contact       Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  actorUserId   String?
+  actor         User? @relation("ActorUser", fields: [actorUserId], references: [id])
+
+  createdAt     DateTime @default(now())
+
+  @@index([type])
+  @@index([occurredAt])
+  @@index([contactId])
+}
