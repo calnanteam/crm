@@ -19,7 +19,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 enum ContactType {
@@ -113,6 +112,14 @@ enum ActivityType {
   TASK_COMPLETED
 }
 
+enum ProposalStatus {
+  DRAFT
+  READY
+  SENT
+  ACCEPTED
+  DECLINED
+}
+
 model User {
   id            String   @id @default(cuid())
   // Graph identity fields (mirror patterns from email assistant repo)
@@ -127,6 +134,7 @@ model User {
   // Relationships
   ownedContacts Contact[] @relation("OwnerUser")
   proposalContacts Contact[] @relation("ProposalOwnerUser")
+  proposals Proposal[] @relation("ProposalOwnerUserProposal")
   tasksAssigned Task[] @relation("AssignedUser")
   activitiesLogged Activity[] @relation("ActorUser")
 }
@@ -196,6 +204,7 @@ model Contact {
   // Relationships
   tasks               Task[]
   activities          Activity[]
+  proposals           Proposal[]
 
   @@index([email])
   @@index([phone])
@@ -254,4 +263,26 @@ model Activity {
   @@index([type])
   @@index([occurredAt])
   @@index([contactId])
+}
+
+model Proposal {
+  id            String         @id @default(cuid())
+  status        ProposalStatus @default(DRAFT)
+  docUrl        String?
+  notes         String?
+
+  // Ownership
+  ownerUserId   String?
+  owner         User? @relation("ProposalOwnerUserProposal", fields: [ownerUserId], references: [id])
+
+  // Linkage
+  contactId     String
+  contact       Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([contactId])
+  @@index([ownerUserId])
 }
