@@ -1,9 +1,12 @@
 /**
  * Prisma Database Seed Script
  * 
- * This script seeds the database with placeholder data for:
- * - brain_rules: Dynamic rules for the Calnan Brain
- * - brain_projects: Active projects that provide context
+ * This script seeds the database with placeholder data for the CRM:
+ * - Users
+ * - Contacts
+ * - Tasks
+ * - Proposals
+ * - Activities
  * 
  * Run with: npm run prisma:seed
  */
@@ -15,107 +18,120 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Starting database seed...\n');
 
-  // Clear existing data (optional - comment out if you want to preserve existing data)
-  console.log('Clearing existing data...');
-  await prisma.brainRule.deleteMany({});
-  await prisma.brainProject.deleteMany({});
-  console.log('✓ Existing data cleared\n');
+  // Create a default user
+  console.log('Seeding users...');
+  const user = await prisma.user.upsert({
+    where: { email: 'matt@calnan.co' },
+    update: {},
+    create: {
+      email: 'matt@calnan.co',
+      displayName: 'Matt Calnan',
+      isActive: true,
+    },
+  });
+  console.log(`✓ Created user: ${user.email}\n`);
 
-  // Seed Brain Rules
-  console.log('Seeding brain_rules...');
+  // Create sample contacts
+  console.log('Seeding contacts...');
+  const contact1 = await prisma.contact.create({
+    data: {
+      firstName: 'John',
+      lastName: 'Investor',
+      displayName: 'John Investor',
+      email: 'john@example.com',
+      phone: '403-555-0001',
+      city: 'Calgary',
+      region: 'AB',
+      types: ['INVESTOR_CASH'],
+      stage: 'QUALIFIED_ACTIVE',
+      ownerUserId: user.id,
+      capitalPotential: 'BAND_500K_1M',
+    },
+  });
   
-  const brainRules = [
-    {
-      ruleText: 'Always maintain a professional yet approachable tone in all communications. Be concise but not curt.',
-      category: 'Communication Style',
-      active: true,
-      createdBy: 'system',
+  const contact2 = await prisma.contact.create({
+    data: {
+      firstName: 'Sarah',
+      lastName: 'Property',
+      displayName: 'Sarah Property',
+      email: 'sarah@example.com',
+      phone: '403-555-0002',
+      city: 'Edmonton',
+      region: 'AB',
+      types: ['ROLL_IN_OWNER'],
+      stage: 'PROPOSAL_IN_PROGRESS',
+      ownerUserId: user.id,
+      proposalOwnerUserId: user.id,
+      equityRollInPotential: 'BAND_1M_2M',
+      rollInPropertyLocation: 'Downtown Edmonton',
     },
-    {
-      ruleText: 'Never commit to meeting times without explicit confirmation. Always propose 2-3 options and ask for preference.',
-      category: 'Scheduling',
-      active: true,
-      createdBy: 'system',
-    },
-    {
-      ruleText: 'When discussing financial matters or investments, always include appropriate disclaimers and suggest involving relevant advisors.',
-      category: 'Financial Communications',
-      active: true,
-      createdBy: 'system',
-    },
-    {
-      ruleText: 'For urgent matters or requests requiring immediate attention, flag for human review rather than making autonomous decisions.',
-      category: 'Escalation',
-      active: true,
-      createdBy: 'system',
-    },
-    {
-      ruleText: 'Maintain strict confidentiality about ongoing deals, negotiations, and sensitive business information. When in doubt, err on the side of caution.',
-      category: 'Confidentiality',
-      active: true,
-      createdBy: 'system',
-    },
-  ];
+  });
 
-  for (const rule of brainRules) {
-    const created = await prisma.brainRule.create({
-      data: rule,
-    });
-    console.log(`  ✓ Created rule: ${created.category}`);
-  }
+  console.log(`✓ Seeded 2 contacts\n`);
 
-  console.log(`✓ Seeded ${brainRules.length} brain rules\n`);
-
-  // Seed Brain Projects
-  console.log('Seeding brain_projects...');
-
-  const brainProjects = [
-    {
-      projectName: 'TechVentures Portfolio Review',
-      keyFacts: `- Q1 2026 portfolio review in progress
-- Focus on SaaS companies with ARR > $1M
-- Looking for exit opportunities for 3 mature investments
-- Actively seeking co-investment partners for Series B rounds
-- Investment thesis: B2B infrastructure and developer tools`,
-      active: true,
+  // Create sample tasks
+  console.log('Seeding tasks...');
+  await prisma.task.create({
+    data: {
+      title: 'Follow up on investment interest',
+      description: 'Discuss CORE fund investment opportunity',
+      status: 'OPEN',
+      priority: 'HIGH',
+      dueAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+      contactId: contact1.id,
+      assignedToUserId: user.id,
     },
-    {
-      projectName: 'Downtown Commercial Property Development',
-      keyFacts: `- 50,000 sq ft mixed-use development project
-- Located in downtown core, prime location
-- Partners: ABC Development Group, XYZ Architects
-- Timeline: Groundbreaking Q2 2026, completion Q4 2027
-- Seeking additional investors for $5M tranche`,
-      active: true,
-    },
-    {
-      projectName: 'AI Advisory Board Engagement',
-      keyFacts: `- Board member for emerging AI startup (NDA-protected name)
-- Monthly board meetings, first Tuesday of each month
-- Focus areas: Go-to-market strategy, enterprise sales, fundraising
-- Company recently closed $10M Series A
-- Preparing for Series B in 12-18 months`,
-      active: true,
-    },
-    {
-      projectName: 'Real Estate Market Analysis - Calgary Region',
-      keyFacts: `- Comprehensive market analysis for Calgary commercial real estate
-- Focus: Office, retail, and industrial sectors
-- Deliverable: White paper for institutional investors
-- Deadline: End of Q1 2026
-- Collaborating with market research firm and local brokers`,
-      active: true,
-    },
-  ];
+  });
 
-  for (const project of brainProjects) {
-    const created = await prisma.brainProject.create({
-      data: project,
-    });
-    console.log(`  ✓ Created project: ${created.projectName}`);
-  }
+  await prisma.task.create({
+    data: {
+      title: 'Review property details',
+      description: 'Get property valuation and due diligence docs',
+      status: 'IN_PROGRESS',
+      priority: 'MEDIUM',
+      contactId: contact2.id,
+      assignedToUserId: user.id,
+    },
+  });
 
-  console.log(`✓ Seeded ${brainProjects.length} brain projects\n`);
+  console.log(`✓ Seeded 2 tasks\n`);
+
+  // Create a sample proposal for contact2
+  console.log('Seeding proposals...');
+  await prisma.proposal.create({
+    data: {
+      contactId: contact2.id,
+      status: 'DRAFT',
+      notes: 'Initial draft for roll-in proposal. Need to finalize valuation.',
+      ownerUserId: user.id,
+    },
+  });
+
+  console.log(`✓ Seeded 1 proposal\n`);
+
+  // Create sample activities
+  console.log('Seeding activities...');
+  await prisma.activity.create({
+    data: {
+      type: 'NOTE',
+      subject: 'Initial contact made',
+      body: 'Had introductory call. Very interested in CORE fund.',
+      contactId: contact1.id,
+      actorUserId: user.id,
+    },
+  });
+
+  await prisma.activity.create({
+    data: {
+      type: 'STATUS_CHANGE',
+      subject: 'Moved to PROPOSAL_IN_PROGRESS',
+      body: 'Property valuation received. Moving forward with proposal development.',
+      contactId: contact2.id,
+      actorUserId: user.id,
+    },
+  });
+
+  console.log(`✓ Seeded 2 activities\n`);
 
   console.log('✅ Database seed completed successfully!');
 }

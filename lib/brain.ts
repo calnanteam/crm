@@ -93,15 +93,9 @@ export async function readRoleBrain(role: string): Promise<string | null> {
  */
 export async function fetchActiveBrainRules(): Promise<BrainRule[]> {
   try {
-    const rules = await prisma.brainRule.findMany({
-      where: {
-        active: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-    return rules;
+    // BrainRule model not yet implemented in schema - return empty for now
+    // TODO: Add BrainRule model to schema when implementing email assistant features
+    return [];
   } catch (error) {
     console.error('Error fetching brain rules from database:', error);
     throw new Error('Failed to fetch brain rules from database');
@@ -115,15 +109,9 @@ export async function fetchActiveBrainRules(): Promise<BrainRule[]> {
  */
 export async function fetchActiveBrainProjects(): Promise<BrainProject[]> {
   try {
-    const projects = await prisma.brainProject.findMany({
-      where: {
-        active: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-    return projects;
+    // BrainProject model not yet implemented in schema - return empty for now
+    // TODO: Add BrainProject model to schema when implementing email assistant features
+    return [];
   } catch (error) {
     console.error('Error fetching brain projects from database:', error);
     throw new Error('Failed to fetch brain projects from database');

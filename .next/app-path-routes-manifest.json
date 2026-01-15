@@ -1,0 +1,12 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/contacts/[id]/route": "/api/contacts/[id]",
+  "/api/contacts/route": "/api/contacts",
+  "/api/proposals/[id]/route": "/api/proposals/[id]",
+  "/api/proposals/route": "/api/proposals",
+  "/api/tasks/[id]/route": "/api/tasks/[id]",
+  "/api/tasks/route": "/api/tasks",
+  "/contacts/[id]/page": "/contacts/[id]",
+  "/page": "/"
+}
