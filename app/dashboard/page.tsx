@@ -27,6 +27,37 @@ export default async function DashboardPage() {
     take: 10,
   });
 
+  // Get contacts with overdue follow-ups
+  const activeStages = [
+    "CONNECTED_CONVERSATION",
+    "QUALIFIED_ACTIVE",
+    "PROPOSAL_TO_BE_DEVELOPED",
+    "PROPOSAL_IN_PROGRESS",
+    "PROPOSAL_READY_FOR_FORMATTING",
+    "PROPOSAL_SENT",
+    "ACTIVE_NEGOTIATION",
+    "SOFT_COMMITTED",
+  ] as const;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const overdueContacts = await prisma.contact.findMany({
+    where: {
+      stage: { in: [...activeStages] },
+      nextTouchAt: {
+        lt: today,
+      },
+    },
+    include: {
+      owner: true,
+    },
+    orderBy: {
+      nextTouchAt: "asc",
+    },
+    take: 10,
+  });
+
   const contactsByStage = await prisma.contact.groupBy({
     by: ["stage"],
     _count: true,
@@ -67,7 +98,7 @@ export default async function DashboardPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           <Card title="My Tasks">
             {tasks.length === 0 ? (
               <p className="text-gray-500 text-sm">No open tasks</p>
@@ -122,6 +153,48 @@ export default async function DashboardPage() {
             </div>
           </Card>
         </div>
+
+        {/* Overdue Follow-Ups Section */}
+        {overdueContacts.length > 0 && (
+          <div className="mt-8">
+            <Card title="⚠️ Overdue Follow-Ups">
+              <p className="text-sm text-gray-600 mb-4">
+                Active contacts that need attention (nextTouchAt has passed)
+              </p>
+              <div className="space-y-3">
+                {overdueContacts.map((contact) => {
+                  const daysOverdue = contact.nextTouchAt 
+                    ? Math.floor((today.getTime() - new Date(contact.nextTouchAt).getTime()) / (1000 * 60 * 60 * 24))
+                    : 0;
+                  
+                  return (
+                    <div key={contact.id} className="flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded">
+                      <div className="flex-1">
+                        <Link 
+                          href={`/contacts/${contact.id}`}
+                          className="text-sm font-medium text-gray-900 hover:text-blue-600"
+                        >
+                          {contact.displayName || `${contact.firstName} ${contact.lastName}`}
+                        </Link>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Owner: {contact.owner?.displayName || contact.owner?.email || "Unassigned"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                          {daysOverdue === 0 ? "Today" : `${daysOverdue}d overdue`}
+                        </span>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Due: {contact.nextTouchAt ? new Date(contact.nextTouchAt).toLocaleDateString() : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+          </div>
+        )}
       </div>
     </>
   );

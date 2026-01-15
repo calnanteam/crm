@@ -128,6 +128,7 @@ model User {
   proposalContacts Contact[] @relation("ProposalOwnerUser")
   tasksAssigned Task[] @relation("AssignedUser")
   activitiesLogged Activity[] @relation("ActorUser")
+  proposals Proposal[] @relation("ProposalOwner")
 }
 
 model Organization {
@@ -195,6 +196,7 @@ model Contact {
   // Relationships
   tasks               Task[]
   activities          Activity[]
+  proposals           Proposal[]
 
   @@index([email])
   @@index([phone])
@@ -253,4 +255,32 @@ model Activity {
   @@index([type])
   @@index([occurredAt])
   @@index([contactId])
+}
+
+enum ProposalStatus {
+  DRAFT
+  READY
+  SENT
+  ACCEPTED
+  DECLINED
+}
+
+model Proposal {
+  id          String          @id @default(cuid())
+  contactId   String
+  contact     Contact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  
+  status      ProposalStatus  @default(DRAFT)
+  ownerUserId String?
+  owner       User?           @relation("ProposalOwner", fields: [ownerUserId], references: [id])
+  
+  docUrl      String?         // Link to proposal document
+  notes       String?         // Internal notes about proposal
+  
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  
+  @@index([contactId])
+  @@index([status])
+  @@index([ownerUserId])
 }

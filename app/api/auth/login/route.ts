@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyPassword, AUTH_COOKIE_NAME } from "@/lib/auth";
+import { verifyPassword, AUTH_COOKIE_NAME, createAuthToken } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,9 +13,12 @@ export async function POST(request: NextRequest) {
     }
 
     if (verifyPassword(password)) {
+      // Create signed auth token
+      const authToken = await createAuthToken();
+      
       const response = NextResponse.json({ success: true });
       
-      response.cookies.set(AUTH_COOKIE_NAME, "1", {
+      response.cookies.set(AUTH_COOKIE_NAME, authToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
