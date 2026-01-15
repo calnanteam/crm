@@ -92,20 +92,8 @@ export async function readRoleBrain(role: string): Promise<string | null> {
  * @returns Promise<BrainRule[]> - Array of active brain rules
  */
 export async function fetchActiveBrainRules(): Promise<BrainRule[]> {
-  try {
-    const rules = await prisma.brainRule.findMany({
-      where: {
-        active: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-    return rules;
-  } catch (error) {
-    console.error('Error fetching brain rules from database:', error);
-    throw new Error('Failed to fetch brain rules from database');
-  }
+  // TODO: Brain functionality not applicable to CRM
+  return [];
 }
 
 /**
@@ -114,20 +102,8 @@ export async function fetchActiveBrainRules(): Promise<BrainRule[]> {
  * @returns Promise<BrainProject[]> - Array of active brain projects
  */
 export async function fetchActiveBrainProjects(): Promise<BrainProject[]> {
-  try {
-    const projects = await prisma.brainProject.findMany({
-      where: {
-        active: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-    return projects;
-  } catch (error) {
-    console.error('Error fetching brain projects from database:', error);
-    throw new Error('Failed to fetch brain projects from database');
-  }
+  // TODO: Brain functionality not applicable to CRM
+  return [];
 }
 
 /**

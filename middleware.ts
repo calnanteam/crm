@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { AUTH_COOKIE_NAME } from "@/lib/auth";
+import { AUTH_COOKIE_NAME, verifyAuthToken } from "@/lib/auth";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
   // Allow public paths without authentication
@@ -12,9 +12,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Check for auth cookie
+  // Check for auth cookie and verify signature
   const authCookie = request.cookies.get(AUTH_COOKIE_NAME);
-  const isAuthenticated = authCookie?.value === "1";
+  
+  let isAuthenticated = false;
+  if (authCookie?.value) {
+    isAuthenticated = await verifyAuthToken(authCookie.value);
+  }
   
   // Redirect to login if not authenticated
   if (!isAuthenticated) {
