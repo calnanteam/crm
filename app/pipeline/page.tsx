@@ -8,6 +8,7 @@ import { Select } from "../components/Select";
 import { AddTaskModal } from "../components/AddTaskModal";
 import { useRouter } from "next/navigation";
 import { formatRelativeTime } from "../../lib/formatRelativeTime";
+import { Activity, getActivityLabel } from "../../lib/activityTypes";
 
 // Types matching the Prisma schema
 type RelationshipStage =
@@ -26,30 +27,6 @@ type RelationshipStage =
   | "CLOSED_CONVERTED"
   | "DORMANT"
   | "LOST";
-
-type ActivityType =
-  | "NOTE"
-  | "CALL"
-  | "MEETING"
-  | "EMAIL_LOGGED"
-  | "TEXT_LOGGED"
-  | "DOCUMENT_SENT"
-  | "DOCUMENT_RECEIVED"
-  | "STATUS_CHANGE"
-  | "TASK_CREATED"
-  | "TASK_COMPLETED";
-
-interface Activity {
-  id: string;
-  type: ActivityType;
-  occurredAt: string | Date;
-  subject: string | null;
-  body: string | null;
-  actor: {
-    displayName: string | null;
-    email: string;
-  } | null;
-}
 
 interface User {
   id: string;
@@ -292,22 +269,6 @@ export default function PipelinePage() {
     { value: "", label: "All Owners" },
     ...users.map((u) => ({ value: u.id, label: u.displayName || u.email })),
   ];
-
-  const getActivityLabel = (type: ActivityType): string => {
-    const labels: Record<ActivityType, string> = {
-      NOTE: "Note",
-      CALL: "Call",
-      MEETING: "Meeting",
-      EMAIL_LOGGED: "Email",
-      TEXT_LOGGED: "Text",
-      DOCUMENT_SENT: "Document Sent",
-      DOCUMENT_RECEIVED: "Document Received",
-      STATUS_CHANGE: "Status Change",
-      TASK_CREATED: "Task Created",
-      TASK_COMPLETED: "Task Completed",
-    };
-    return labels[type] || type;
-  };
 
   return (
     <>
