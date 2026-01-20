@@ -5,6 +5,7 @@ import { Navigation } from "../components/Navigation";
 import { Card } from "../components/Card";
 import { ContactStageBadge } from "../components/ContactStageBadge";
 import { Select } from "../components/Select";
+import { AddTaskModal } from "../components/AddTaskModal";
 import { useRouter } from "next/navigation";
 
 // Types matching the Prisma schema
@@ -54,6 +55,8 @@ export default function PipelinePage() {
   const [typeFilter, setTypeFilter] = useState("");
   const [updatingContactId, setUpdatingContactId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [addTaskModalOpen, setAddTaskModalOpen] = useState(false);
+  const [selectedContactForTask, setSelectedContactForTask] = useState<Contact | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -175,6 +178,16 @@ export default function PipelinePage() {
     } finally {
       setUpdatingContactId(null);
     }
+  };
+
+  const handleAddTask = (contact: Contact) => {
+    setSelectedContactForTask(contact);
+    setAddTaskModalOpen(true);
+  };
+
+  const handleCloseTaskModal = () => {
+    setAddTaskModalOpen(false);
+    setSelectedContactForTask(null);
   };
 
   // Group stages into logical columns for the Kanban view
@@ -320,18 +333,30 @@ export default function PipelinePage() {
                             key={contact.id}
                             className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-shadow"
                           >
-                            <div 
-                              className="mb-2 cursor-pointer"
-                              onClick={() => router.push(`/contacts/${contact.id}`)}
-                            >
-                              <p className="font-medium text-sm text-gray-900 truncate">
-                                {contact.displayName ||
-                                  `${contact.firstName || ""} ${contact.lastName || ""}`.trim() ||
-                                  "Unknown"}
-                              </p>
-                              {contact.email && (
-                                <p className="text-xs text-gray-500 truncate mt-1">{contact.email}</p>
-                              )}
+                            <div className="flex justify-between items-start mb-2">
+                              <div 
+                                className="flex-1 cursor-pointer"
+                                onClick={() => router.push(`/contacts/${contact.id}`)}
+                              >
+                                <p className="font-medium text-sm text-gray-900 truncate">
+                                  {contact.displayName ||
+                                    `${contact.firstName || ""} ${contact.lastName || ""}`.trim() ||
+                                    "Unknown"}
+                                </p>
+                                {contact.email && (
+                                  <p className="text-xs text-gray-500 truncate mt-1">{contact.email}</p>
+                                )}
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddTask(contact);
+                                }}
+                                className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                                title="Add Task"
+                              >
+                                + Task
+                              </button>
                             </div>
 
                             <div className="mb-2">
@@ -400,6 +425,19 @@ export default function PipelinePage() {
           </div>
         )}
       </div>
+
+      {selectedContactForTask && (
+        <AddTaskModal
+          isOpen={addTaskModalOpen}
+          onClose={handleCloseTaskModal}
+          contactId={selectedContactForTask.id}
+          contactName={
+            selectedContactForTask.displayName ||
+            `${selectedContactForTask.firstName || ""} ${selectedContactForTask.lastName || ""}`.trim() ||
+            "Unknown"
+          }
+        />
+      )}
     </>
   );
 }
