@@ -10,6 +10,7 @@ export function Navigation() {
   const links = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/contacts", label: "Contacts" },
+    { href: "/pipeline", label: "Pipeline" },
     { href: "/tasks", label: "Tasks" },
   ];
 
