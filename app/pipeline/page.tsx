@@ -270,6 +270,12 @@ export default function PipelinePage() {
     setSelectedContactForTask(null);
   };
 
+  const handleClearFilters = () => {
+    setOwnerFilter("");
+    setVehicleFilter("");
+    setTypeFilter("");
+  };
+
   // Group stages into logical columns for the Kanban view
   const stageGroups = [
     {
@@ -361,26 +367,34 @@ export default function PipelinePage() {
           </div>
         )}
 
-        {/* Filters */}
-        <Card className="mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Select
-              options={userOptions}
-              value={ownerFilter}
-              onChange={(e) => setOwnerFilter(e.target.value)}
-            />
-            <Select
-              options={vehicleOptions}
-              value={vehicleFilter}
-              onChange={(e) => setVehicleFilter(e.target.value)}
-            />
-            <Select
-              options={typeOptions}
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-            />
-          </div>
-        </Card>
+        {/* Filters - Sticky */}
+        <div className="sticky top-0 z-10 bg-white pb-4 mb-2">
+          <Card className="shadow-md">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Select
+                options={userOptions}
+                value={ownerFilter}
+                onChange={(e) => setOwnerFilter(e.target.value)}
+              />
+              <Select
+                options={vehicleOptions}
+                value={vehicleFilter}
+                onChange={(e) => setVehicleFilter(e.target.value)}
+              />
+              <Select
+                options={typeOptions}
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+              />
+              <button
+                onClick={handleClearFilters}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              >
+                Clear Filters
+              </button>
+            </div>
+          </Card>
+        </div>
 
         {loading ? (
           <div className="text-center py-12">
@@ -411,13 +425,19 @@ export default function PipelinePage() {
                         groupContacts.map((contact) => (
                           <div
                             key={contact.id}
-                            className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-shadow"
+                            className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 transition-all duration-200 hover:shadow-lg hover:border-blue-300 group relative"
                           >
+                            {/* Open affordance - appears on hover */}
+                            <button
+                              onClick={() => router.push(`/contacts/${contact.id}`)}
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200"
+                              title="Open contact details"
+                            >
+                              Open
+                            </button>
+
                             <div className="flex justify-between items-start mb-2">
-                              <div 
-                                className="flex-1 cursor-pointer"
-                                onClick={() => router.push(`/contacts/${contact.id}`)}
-                              >
+                              <div className="flex-1 pr-12">
                                 <p className="font-medium text-sm text-gray-900 truncate">
                                   {contact.displayName ||
                                     `${contact.firstName || ""} ${contact.lastName || ""}`.trim() ||
@@ -495,15 +515,14 @@ export default function PipelinePage() {
                               </div>
                             )}
 
-                            {/* Last Activity */}
+                            {/* Last Activity - Polished with truncation */}
                             <div className="mt-2 pt-2 border-t border-gray-100">
                               {contact.lastActivity ? (
                                 <div className="text-xs text-gray-500">
-                                  <span className="font-medium text-gray-700">
+                                  <span className="font-medium text-gray-700 truncate block max-w-[80%]">
                                     {getActivityLabel(contact.lastActivity.type)}
                                   </span>
-                                  {" • "}
-                                  <span>
+                                  <span className="text-gray-500">
                                     {formatRelativeTime(contact.lastActivity.occurredAt)}
                                   </span>
                                 </div>
