@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
     const vehicle = searchParams.get("vehicle");
     const contactType = searchParams.get("contactType");
     const search = searchParams.get("search");
+    const includeLastActivity = searchParams.get("includeLastActivity") === "true";
     const skip = parseInt(searchParams.get("skip") || "0");
     const take = parseInt(searchParams.get("take") || "50");
 
@@ -93,6 +94,15 @@ export async function GET(request: NextRequest) {
         owner: true,
         proposalOwner: true,
         organization: true,
+        ...(includeLastActivity && {
+          activities: {
+            take: 1,
+            orderBy: { occurredAt: "desc" },
+            include: {
+              actor: true,
+            },
+          },
+        }),
       },
       orderBy: { updatedAt: "desc" },
       skip,
