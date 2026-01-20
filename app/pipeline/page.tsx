@@ -114,8 +114,14 @@ export default function PipelinePage() {
       );
     } catch (err) {
       setError("Failed to update stage. Please try again.");
-      // Revert the change by refetching
-      fetchContacts();
+      // Revert the change in local state
+      setContacts((prevContacts) =>
+        prevContacts.map((contact) =>
+          contact.id === contactId
+            ? { ...contact, stage: oldStage }
+            : contact
+        )
+      );
     } finally {
       setUpdatingContactId(null);
     }
