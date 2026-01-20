@@ -1,4 +1,26 @@
-import { Activity, ActivityType, getActivityLabel } from "../../lib/activityTypes";
+type ActivityType = 
+  | "NOTE"
+  | "CALL"
+  | "MEETING"
+  | "EMAIL_LOGGED"
+  | "TEXT_LOGGED"
+  | "DOCUMENT_SENT"
+  | "DOCUMENT_RECEIVED"
+  | "STATUS_CHANGE"
+  | "TASK_CREATED"
+  | "TASK_COMPLETED";
+
+interface Activity {
+  id: string;
+  type: ActivityType;
+  occurredAt: string | Date;
+  subject: string | null;
+  body: string | null;
+  actor: {
+    displayName: string | null;
+    email: string;
+  } | null;
+}
 
 interface ActivityTimelineItemProps {
   activity: Activity;
@@ -18,6 +40,19 @@ export function ActivityTimelineItem({ activity }: ActivityTimelineItemProps) {
     TASK_COMPLETED: "✔️",
   };
 
+  const typeLabels: Record<ActivityType, string> = {
+    NOTE: "Note",
+    CALL: "Call",
+    MEETING: "Meeting",
+    EMAIL_LOGGED: "Email",
+    TEXT_LOGGED: "Text",
+    DOCUMENT_SENT: "Document Sent",
+    DOCUMENT_RECEIVED: "Document Received",
+    STATUS_CHANGE: "Status Change",
+    TASK_CREATED: "Task Created",
+    TASK_COMPLETED: "Task Completed",
+  };
+
   const occurredDate = typeof activity.occurredAt === 'string' 
     ? new Date(activity.occurredAt) 
     : activity.occurredAt;
@@ -29,7 +64,7 @@ export function ActivityTimelineItem({ activity }: ActivityTimelineItemProps) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center space-x-2">
-          <p className="text-sm font-medium text-gray-900">{getActivityLabel(activity.type)}</p>
+          <p className="text-sm font-medium text-gray-900">{typeLabels[activity.type]}</p>
           <span className="text-xs text-gray-500">
             {occurredDate.toLocaleDateString()} at{" "}
             {occurredDate.toLocaleTimeString()}

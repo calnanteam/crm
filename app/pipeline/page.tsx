@@ -7,8 +7,6 @@ import { ContactStageBadge } from "../components/ContactStageBadge";
 import { Select } from "../components/Select";
 import { AddTaskModal } from "../components/AddTaskModal";
 import { useRouter } from "next/navigation";
-import { formatRelativeTime } from "../../lib/formatRelativeTime";
-import { Activity, getActivityLabel } from "../../lib/activityTypes";
 
 // Types matching the Prisma schema
 type RelationshipStage =
@@ -28,6 +26,26 @@ type RelationshipStage =
   | "DORMANT"
   | "LOST";
 
+type ActivityType =
+  | "NOTE"
+  | "CALL"
+  | "MEETING"
+  | "EMAIL_LOGGED"
+  | "TEXT_LOGGED"
+  | "DOCUMENT_SENT"
+  | "DOCUMENT_RECEIVED"
+  | "STATUS_CHANGE"
+  | "TASK_CREATED"
+  | "TASK_COMPLETED";
+
+interface Activity {
+  id: string;
+  type: ActivityType;
+  occurredAt: string | Date;
+  subject: string | null;
+  body: string | null;
+}
+
 interface User {
   id: string;
   email: string;
@@ -45,7 +63,7 @@ interface Contact {
   owner?: User;
   vehicle: "CORE" | "CAST3";
   types: string[];
-  activities?: Activity[];
+  lastActivity?: Activity | null;
 }
 
 export default function PipelinePage() {
@@ -60,6 +78,47 @@ export default function PipelinePage() {
   const [error, setError] = useState<string | null>(null);
   const [addTaskModalOpen, setAddTaskModalOpen] = useState(false);
   const [selectedContactForTask, setSelectedContactForTask] = useState<Contact | null>(null);
+
+  // Helper: Format relative time (e.g., "3 hours ago")
+  const formatRelativeTime = (date: string | Date): string => {
+    const now = new Date();
+    const then = typeof date === "string" ? new Date(date) : date;
+    const diffInSeconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return "just now";
+    
+    const diffInMinutes = Math.floor(diffInSeconds / 60);
+    if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes === 1 ? "" : "s"} ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours === 1 ? "" : "s"} ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 30) return `${diffInDays} day${diffInDays === 1 ? "" : "s"} ago`;
+    
+    const diffInMonths = Math.floor(diffInDays / 30);
+    if (diffInMonths < 12) return `${diffInMonths} month${diffInMonths === 1 ? "" : "s"} ago`;
+    
+    const diffInYears = Math.floor(diffInMonths / 12);
+    return `${diffInYears} year${diffInYears === 1 ? "" : "s"} ago`;
+  };
+
+  // Helper: Get activity type label
+  const getActivityLabel = (type: ActivityType): string => {
+    const labels: Record<ActivityType, string> = {
+      NOTE: "Note",
+      CALL: "Call",
+      MEETING: "Meeting",
+      EMAIL_LOGGED: "Email",
+      TEXT_LOGGED: "Text",
+      DOCUMENT_SENT: "Document Sent",
+      DOCUMENT_RECEIVED: "Document Received",
+      STATUS_CHANGE: "Status Change",
+      TASK_CREATED: "Task Created",
+      TASK_COMPLETED: "Task Completed",
+    };
+    return labels[type] || type;
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -78,11 +137,28 @@ export default function PipelinePage() {
     if (ownerFilter) params.append("ownerUserId", ownerFilter);
     if (vehicleFilter) params.append("vehicle", vehicleFilter);
     if (typeFilter) params.append("contactType", typeFilter);
-    params.append("includeLastActivity", "true");
 
     const response = await fetch(`/api/contacts?${params}`);
     const data = await response.json();
-    setContacts(data);
+    
+    // Fetch last activity for each contact using existing endpoint
+    const contactsWithActivities = await Promise.all(
+      data.map(async (contact: Contact) => {
+        try {
+          const activityResponse = await fetch(`/api/activities?contactId=${contact.id}`);
+          const activities = await activityResponse.json();
+          return {
+            ...contact,
+            lastActivity: activities.length > 0 ? activities[0] : null,
+          };
+        } catch (err) {
+          console.error(`Failed to fetch activities for contact ${contact.id}:`, err);
+          return { ...contact, lastActivity: null };
+        }
+      })
+    );
+    
+    setContacts(contactsWithActivities);
     setLoading(false);
   };
 
@@ -421,14 +497,14 @@ export default function PipelinePage() {
 
                             {/* Last Activity */}
                             <div className="mt-2 pt-2 border-t border-gray-100">
-                              {contact.activities && contact.activities.length > 0 ? (
+                              {contact.lastActivity ? (
                                 <div className="text-xs text-gray-500">
                                   <span className="font-medium text-gray-700">
-                                    {getActivityLabel(contact.activities[0].type)}
+                                    {getActivityLabel(contact.lastActivity.type)}
                                   </span>
                                   {" • "}
                                   <span>
-                                    {formatRelativeTime(contact.activities[0].occurredAt)}
+                                    {formatRelativeTime(contact.lastActivity.occurredAt)}
                                   </span>
                                 </div>
                               ) : (
