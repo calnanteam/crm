@@ -7,6 +7,7 @@ import { ContactStageBadge } from "../components/ContactStageBadge";
 import { Select } from "../components/Select";
 import { useRouter } from "next/navigation";
 
+// Types matching the Prisma schema
 type RelationshipStage =
   | "NEW_LEAD"
   | "FIRST_OUTREACH_SENT"
@@ -24,6 +25,12 @@ type RelationshipStage =
   | "DORMANT"
   | "LOST";
 
+interface User {
+  id: string;
+  email: string;
+  displayName?: string;
+}
+
 interface Contact {
   id: string;
   firstName?: string;
@@ -31,18 +38,15 @@ interface Contact {
   displayName?: string;
   email?: string;
   stage: RelationshipStage;
-  owner?: {
-    displayName?: string;
-    email?: string;
-  };
-  vehicle: string;
+  owner?: User;
+  vehicle: "CORE" | "CAST3";
   types: string[];
 }
 
 export default function PipelinePage() {
   const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [ownerFilter, setOwnerFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
