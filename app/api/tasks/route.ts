@@ -7,12 +7,14 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status");
     const priority = searchParams.get("priority");
     const assignedToUserId = searchParams.get("assignedToUserId");
+    const contactId = searchParams.get("contactId");
 
     const where: any = {};
 
     if (status) where.status = status;
     if (priority) where.priority = priority;
     if (assignedToUserId) where.assignedToUserId = assignedToUserId;
+    if (contactId) where.contactId = contactId;
 
     const tasks = await prisma.task.findMany({
       where,
