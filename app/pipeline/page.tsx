@@ -131,7 +131,8 @@ export default function PipelinePage() {
   const handleOwnerChange = async (
     contactId: string,
     newOwnerId: string,
-    oldOwnerId: string | null | undefined
+    oldOwnerId: string | null | undefined,
+    oldOwner: User | undefined
   ) => {
     if (newOwnerId === (oldOwnerId || "")) return;
 
@@ -167,7 +168,7 @@ export default function PipelinePage() {
       setContacts((prevContacts) =>
         prevContacts.map((contact) =>
           contact.id === contactId
-            ? { ...contact, ownerUserId: oldOwnerId || null }
+            ? { ...contact, ownerUserId: oldOwnerId || null, owner: oldOwner }
             : contact
         )
       );
@@ -366,7 +367,8 @@ export default function PipelinePage() {
                                   handleOwnerChange(
                                     contact.id,
                                     e.target.value,
-                                    contact.ownerUserId
+                                    contact.ownerUserId,
+                                    contact.owner
                                   );
                                 }}
                                 onClick={(e) => e.stopPropagation()}
