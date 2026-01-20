@@ -51,6 +51,8 @@ export default function PipelinePage() {
   const [ownerFilter, setOwnerFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [updatingContactId, setUpdatingContactId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchUsers();
@@ -74,6 +76,55 @@ export default function PipelinePage() {
     const data = await response.json();
     setContacts(data);
     setLoading(false);
+  };
+
+  const handleStageChange = async (
+    contactId: string,
+    newStage: RelationshipStage,
+    oldStage: RelationshipStage
+  ) => {
+    if (newStage === oldStage) return;
+
+    setUpdatingContactId(contactId);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/contacts/${contactId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stage: newStage,
+          oldStage,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update stage");
+      }
+
+      const updatedContact = await response.json();
+
+      // Update the contact in state
+      setContacts((prevContacts) =>
+        prevContacts.map((contact) =>
+          contact.id === contactId
+            ? { ...contact, stage: updatedContact.stage }
+            : contact
+        )
+      );
+    } catch (err) {
+      setError("Failed to update stage. Please try again.");
+      // Revert the change in local state
+      setContacts((prevContacts) =>
+        prevContacts.map((contact) =>
+          contact.id === contactId
+            ? { ...contact, stage: oldStage }
+            : contact
+        )
+      );
+    } finally {
+      setUpdatingContactId(null);
+    }
   };
 
   // Group stages into logical columns for the Kanban view
@@ -114,6 +165,24 @@ export default function PipelinePage() {
     return contacts.filter((contact) => stages.includes(contact.stage));
   };
 
+  const allStageOptions = [
+    { value: "NEW_LEAD", label: "New Lead" },
+    { value: "FIRST_OUTREACH_SENT", label: "First Outreach" },
+    { value: "CONNECTED_CONVERSATION", label: "Connected" },
+    { value: "QUESTIONNAIRE_SENT", label: "Questionnaire Sent" },
+    { value: "QUESTIONNAIRE_RECEIVED", label: "Questionnaire Received" },
+    { value: "QUALIFIED_ACTIVE", label: "Qualified Active" },
+    { value: "PROPOSAL_TO_BE_DEVELOPED", label: "Proposal: To Be Developed" },
+    { value: "PROPOSAL_IN_PROGRESS", label: "Proposal: In Progress" },
+    { value: "PROPOSAL_READY_FOR_FORMATTING", label: "Proposal: Ready for Formatting" },
+    { value: "PROPOSAL_SENT", label: "Proposal Sent" },
+    { value: "ACTIVE_NEGOTIATION", label: "Active Negotiation" },
+    { value: "SOFT_COMMITTED", label: "Soft Committed" },
+    { value: "CLOSED_CONVERTED", label: "Closed Converted" },
+    { value: "DORMANT", label: "Dormant" },
+    { value: "LOST", label: "Lost" },
+  ];
+
   const vehicleOptions = [
     { value: "", label: "All Vehicles" },
     { value: "CORE", label: "CORE" },
@@ -141,6 +210,13 @@ export default function PipelinePage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Pipeline View</h1>
         </div>
+
+        {/* Error message */}
+        {error && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-800">{error}</p>
+          </div>
+        )}
 
         {/* Filters */}
         <Card className="mb-6">
@@ -192,10 +268,12 @@ export default function PipelinePage() {
                         groupContacts.map((contact) => (
                           <div
                             key={contact.id}
-                            className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-shadow cursor-pointer"
-                            onClick={() => router.push(`/contacts/${contact.id}`)}
+                            className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 hover:shadow-md transition-shadow"
                           >
-                            <div className="mb-2">
+                            <div 
+                              className="mb-2 cursor-pointer"
+                              onClick={() => router.push(`/contacts/${contact.id}`)}
+                            >
                               <p className="font-medium text-sm text-gray-900 truncate">
                                 {contact.displayName ||
                                   `${contact.firstName || ""} ${contact.lastName || ""}`.trim() ||
@@ -206,8 +284,27 @@ export default function PipelinePage() {
                               )}
                             </div>
 
-                            <div className="flex items-center justify-between">
-                              <ContactStageBadge stage={contact.stage} />
+                            <div className="mb-2">
+                              <select
+                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                value={contact.stage}
+                                disabled={updatingContactId === contact.id}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleStageChange(
+                                    contact.id,
+                                    e.target.value as RelationshipStage,
+                                    contact.stage
+                                  );
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {allStageOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
                             </div>
 
                             {contact.owner && (
