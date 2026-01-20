@@ -6,6 +6,8 @@ import { Input } from "./Input";
 import { TextArea } from "./TextArea";
 import { Button } from "./Button";
 
+const SUCCESS_DISPLAY_DURATION = 1000; // milliseconds
+
 interface AddTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -72,7 +74,7 @@ export function AddTaskModal({
         }
         onClose();
         setSuccessMessage(null);
-      }, 1000);
+      }, SUCCESS_DISPLAY_DURATION);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create task");
     } finally {
