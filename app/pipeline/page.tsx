@@ -38,6 +38,7 @@ interface Contact {
   displayName?: string;
   email?: string;
   stage: RelationshipStage;
+  ownerUserId?: string | null;
   owner?: User;
   vehicle: "CORE" | "CAST3";
   types: string[];
@@ -119,6 +120,55 @@ export default function PipelinePage() {
         prevContacts.map((contact) =>
           contact.id === contactId
             ? { ...contact, stage: oldStage }
+            : contact
+        )
+      );
+    } finally {
+      setUpdatingContactId(null);
+    }
+  };
+
+  const handleOwnerChange = async (
+    contactId: string,
+    newOwnerId: string,
+    oldOwnerId: string | null | undefined,
+    oldOwner: User | undefined
+  ) => {
+    if (newOwnerId === (oldOwnerId || "")) return;
+
+    setUpdatingContactId(contactId);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/contacts/${contactId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ownerUserId: newOwnerId || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update owner");
+      }
+
+      const updatedContact = await response.json();
+
+      // Update the contact in state
+      setContacts((prevContacts) =>
+        prevContacts.map((contact) =>
+          contact.id === contactId
+            ? { ...contact, ownerUserId: updatedContact.ownerUserId, owner: updatedContact.owner }
+            : contact
+        )
+      );
+    } catch (err) {
+      setError("Failed to update owner. Please try again.");
+      // Revert the change in local state
+      setContacts((prevContacts) =>
+        prevContacts.map((contact) =>
+          contact.id === contactId
+            ? { ...contact, ownerUserId: oldOwnerId || null, owner: oldOwner }
             : contact
         )
       );
@@ -307,13 +357,30 @@ export default function PipelinePage() {
                               </select>
                             </div>
 
-                            {contact.owner && (
-                              <div className="mt-2 pt-2 border-t border-gray-100">
-                                <p className="text-xs text-gray-600">
-                                  Owner: {contact.owner.displayName || contact.owner.email}
-                                </p>
-                              </div>
-                            )}
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <select
+                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                value={contact.ownerUserId || ""}
+                                disabled={updatingContactId === contact.id}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleOwnerChange(
+                                    contact.id,
+                                    e.target.value,
+                                    contact.ownerUserId,
+                                    contact.owner
+                                  );
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <option value="">Unassigned</option>
+                                {users.map((user) => (
+                                  <option key={user.id} value={user.id}>
+                                    {user.displayName || user.email}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
 
                             {contact.vehicle && (
                               <div className="mt-1">
