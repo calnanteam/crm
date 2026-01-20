@@ -52,6 +52,13 @@ interface User {
   displayName?: string;
 }
 
+interface Task {
+  id: string;
+  title: string;
+  status: string;
+  dueAt?: string | Date | null;
+}
+
 interface Contact {
   id: string;
   firstName?: string;
@@ -140,11 +147,11 @@ export default function PipelinePage() {
   const fetchTaskSignalsForContact = async (contactId: string): Promise<TaskSignals> => {
     try {
       const response = await fetch(`/api/tasks?contactId=${contactId}&status=OPEN`);
-      const tasks = await response.json();
+      const tasks: Task[] = await response.json();
       
       const now = new Date();
       const openCount = tasks.length;
-      const overdueCount = tasks.filter((task: any) => 
+      const overdueCount = tasks.filter((task) => 
         task.dueAt && new Date(task.dueAt) < now
       ).length;
       
