@@ -8,31 +8,60 @@ import { Input } from "../components/Input";
 import { Select } from "../components/Select";
 import { Button } from "../components/Button";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function ContactsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<any[]>([]);
-  const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [vehicleFilter, setVehicleFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [sortFilter, setSortFilter] = useState("lastTouchAt_desc");
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const initializedRef = useRef(false);
 
-  // Debounce search input by 250ms
+  // Initialize filters from URL on mount
   useEffect(() => {
+    if (!initializedRef.current) {
+      initializedRef.current = true;
+      const q = searchParams.get("q") || "";
+      const stage = searchParams.get("stage") || "";
+      const owner = searchParams.get("owner") || "";
+      const type = searchParams.get("type") || "";
+      const vehicle = searchParams.get("vehicle") || "";
+      const sort = searchParams.get("sort") || "lastTouchAt_desc";
+      
+      setSearch(q);
+      setStageFilter(stage);
+      setOwnerFilter(owner);
+      setTypeFilter(type);
+      setVehicleFilter(vehicle);
+      setSortFilter(sort);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  // Debounce search and update URL
+  useEffect(() => {
+    if (!initializedRef.current) return;
+    
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
     }
     debounceTimerRef.current = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 250);
+      updateURLAndFetch();
+    }, 300);
     return () => {
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
@@ -40,46 +69,11 @@ export default function ContactsPage() {
     };
   }, [search]);
 
+  // Update URL and fetch when filters change
   useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  useEffect(() => {
-    fetchContacts();
-  }, [stageFilter, ownerFilter, vehicleFilter, typeFilter]);
-
-  // Client-side filtering for search (name, email, phone, company)
-  useEffect(() => {
-    if (!debouncedSearch) {
-      setFilteredContacts(contacts);
-      return;
-    }
-
-    const searchLower = debouncedSearch.toLowerCase();
-    const filtered = contacts.filter((contact) => {
-      // Search by name
-      if (contact.firstName?.toLowerCase().includes(searchLower)) return true;
-      if (contact.lastName?.toLowerCase().includes(searchLower)) return true;
-      if (contact.displayName?.toLowerCase().includes(searchLower)) return true;
-      
-      // Search by email
-      if (contact.email?.toLowerCase().includes(searchLower)) return true;
-      
-      // Search by phone (remove non-digits for matching)
-      if (contact.phone) {
-        const phoneDigits = contact.phone.replace(/\D/g, '');
-        const searchDigits = debouncedSearch.replace(/\D/g, '');
-        if (phoneDigits.includes(searchDigits)) return true;
-      }
-      
-      // Search by company/organization
-      if (contact.organization?.name?.toLowerCase().includes(searchLower)) return true;
-      
-      return false;
-    });
-
-    setFilteredContacts(filtered);
-  }, [contacts, debouncedSearch]);
+    if (!initializedRef.current) return;
+    updateURLAndFetch();
+  }, [stageFilter, ownerFilter, vehicleFilter, typeFilter, sortFilter]);
 
   const fetchUsers = async () => {
     const response = await fetch("/api/users");
@@ -87,28 +81,75 @@ export default function ContactsPage() {
     setUsers(data);
   };
 
-  const fetchContacts = async () => {
-    setLoading(true);
+  const updateURLAndFetch = () => {
     const params = new URLSearchParams();
-    if (stageFilter) params.append("stage", stageFilter);
-    if (ownerFilter) params.append("ownerUserId", ownerFilter);
-    if (vehicleFilter) params.append("vehicle", vehicleFilter);
-    if (typeFilter) params.append("contactType", typeFilter);
+    if (search) params.set("q", search);
+    if (stageFilter) params.set("stage", stageFilter);
+    if (ownerFilter) params.set("owner", ownerFilter);
+    if (vehicleFilter) params.set("vehicle", vehicleFilter);
+    if (typeFilter) params.set("type", typeFilter);
+    if (sortFilter && sortFilter !== "lastTouchAt_desc") params.set("sort", sortFilter);
 
-    const response = await fetch(`/api/contacts?${params}`);
-    const data = await response.json();
-    setContacts(data);
-    setFilteredContacts(data);
-    setLoading(false);
+    // Update URL without reload
+    const newUrl = params.toString() ? `?${params.toString()}` : "/contacts";
+    router.replace(newUrl, { scroll: false });
+
+    // Fetch first page
+    fetchContacts();
+  };
+
+  const fetchContacts = async (cursor?: string) => {
+    if (cursor) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setContacts([]);
+      setNextCursor(null);
+    }
+
+    const params = new URLSearchParams();
+    params.set("limit", "25");
+    if (search) params.set("q", search);
+    if (stageFilter) params.set("stage", stageFilter);
+    if (ownerFilter) params.set("ownerUserId", ownerFilter);
+    if (vehicleFilter) params.set("vehicle", vehicleFilter);
+    if (typeFilter) params.set("contactType", typeFilter);
+    if (sortFilter) params.set("sort", sortFilter);
+    if (cursor) params.set("cursor", cursor);
+
+    try {
+      const response = await fetch(`/api/contacts?${params}`);
+      const data = await response.json();
+      
+      if (cursor) {
+        // Append to existing contacts
+        setContacts((prev) => [...prev, ...data.items]);
+      } else {
+        // Replace contacts
+        setContacts(data.items);
+      }
+      setNextCursor(data.nextCursor);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const handleLoadMore = () => {
+    if (nextCursor && !loadingMore) {
+      fetchContacts(nextCursor);
+    }
   };
 
   const handleClearFilters = () => {
     setSearch("");
-    setDebouncedSearch("");
     setStageFilter("");
     setOwnerFilter("");
     setVehicleFilter("");
     setTypeFilter("");
+    setSortFilter("lastTouchAt_desc");
   };
 
   const formatRelativeTime = (dateString: string | null | undefined) => {
@@ -153,6 +194,15 @@ export default function ContactsPage() {
     { value: "PARTNER", label: "Partner" },
   ];
 
+  const sortOptions = [
+    { value: "lastTouchAt_desc", label: "Last Activity (Recent)" },
+    { value: "lastTouchAt_asc", label: "Last Activity (Oldest)" },
+    { value: "createdAt_desc", label: "Date Created (Newest)" },
+    { value: "createdAt_asc", label: "Date Created (Oldest)" },
+    { value: "name_asc", label: "Name (A-Z)" },
+    { value: "name_desc", label: "Name (Z-A)" },
+  ];
+
   const userOptions = [
     { value: "", label: "All Owners" },
     ...users.map((u) => ({ value: u.id, label: u.displayName || u.email })),
@@ -181,7 +231,7 @@ export default function ContactsPage() {
             </div>
 
             {/* Filter Dropdowns */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <Select
                 options={stageOptions}
                 value={stageFilter}
@@ -202,9 +252,14 @@ export default function ContactsPage() {
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
               />
+              <Select
+                options={sortOptions}
+                value={sortFilter}
+                onChange={(e) => setSortFilter(e.target.value)}
+              />
             </div>
 
-            {(search || stageFilter || ownerFilter || vehicleFilter || typeFilter) && (
+            {(search || stageFilter || ownerFilter || vehicleFilter || typeFilter || sortFilter !== "lastTouchAt_desc") && (
               <div className="flex justify-end">
                 <Button
                   onClick={handleClearFilters}
@@ -220,38 +275,39 @@ export default function ContactsPage() {
         <Card>
           {loading ? (
             <p>Loading...</p>
-          ) : filteredContacts.length === 0 ? (
+          ) : contacts.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No contacts found</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Stage
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Owner
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Vehicle
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Activity
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredContacts.map((contact) => (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Stage
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Owner
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Vehicle
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Last Activity
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {contacts.map((contact) => (
                     <tr
                       key={contact.id}
                       className={`cursor-pointer transition-all duration-150 ${
@@ -314,10 +370,23 @@ export default function ContactsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {nextCursor && (
+                <div className="mt-6 flex justify-center">
+                  <Button
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="px-6 py-2"
+                  >
+                    {loadingMore ? "Loading..." : "Load More"}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </Card>
       </div>
