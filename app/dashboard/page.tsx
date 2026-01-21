@@ -63,7 +63,7 @@ export default async function DashboardPage() {
     _count: true,
   });
 
-  const stageMap = contactsByStage.reduce((acc, item) => {
+  const stageMap = contactsByStage.reduce((acc: Record<string, number>, item: any) => {
     acc[item.stage] = item._count;
     return acc;
   }, {} as Record<string, number>);
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
               <p className="text-gray-500 text-sm">No open tasks</p>
             ) : (
               <div className="space-y-2">
-                {tasks.map((task) => (
+                {tasks.map((task: any) => (
                   <TaskListItem key={task.id} task={task} />
                 ))}
               </div>
@@ -162,7 +162,7 @@ export default async function DashboardPage() {
                 Active contacts that need attention (nextTouchAt has passed)
               </p>
               <div className="space-y-3">
-                {overdueContacts.map((contact) => {
+                {overdueContacts.map((contact: any) => {
                   const daysOverdue = contact.nextTouchAt 
                     ? Math.floor((today.getTime() - new Date(contact.nextTouchAt).getTime()) / (1000 * 60 * 60 * 24))
                     : 0;

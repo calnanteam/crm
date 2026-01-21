@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 export default function ContactsPage() {
   const router = useRouter();
   const [contacts, setContacts] = useState<any[]>([]);
+  const [filteredContacts, setFilteredContacts] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -45,7 +46,40 @@ export default function ContactsPage() {
 
   useEffect(() => {
     fetchContacts();
-  }, [debouncedSearch, stageFilter, ownerFilter, vehicleFilter, typeFilter]);
+  }, [stageFilter, ownerFilter, vehicleFilter, typeFilter]);
+
+  // Client-side filtering for search (name, email, phone, company)
+  useEffect(() => {
+    if (!debouncedSearch) {
+      setFilteredContacts(contacts);
+      return;
+    }
+
+    const searchLower = debouncedSearch.toLowerCase();
+    const filtered = contacts.filter((contact) => {
+      // Search by name
+      if (contact.firstName?.toLowerCase().includes(searchLower)) return true;
+      if (contact.lastName?.toLowerCase().includes(searchLower)) return true;
+      if (contact.displayName?.toLowerCase().includes(searchLower)) return true;
+      
+      // Search by email
+      if (contact.email?.toLowerCase().includes(searchLower)) return true;
+      
+      // Search by phone (remove non-digits for matching)
+      if (contact.phone) {
+        const phoneDigits = contact.phone.replace(/\D/g, '');
+        const searchDigits = debouncedSearch.replace(/\D/g, '');
+        if (phoneDigits.includes(searchDigits)) return true;
+      }
+      
+      // Search by company/organization
+      if (contact.organization?.name?.toLowerCase().includes(searchLower)) return true;
+      
+      return false;
+    });
+
+    setFilteredContacts(filtered);
+  }, [contacts, debouncedSearch]);
 
   const fetchUsers = async () => {
     const response = await fetch("/api/users");
@@ -56,9 +90,6 @@ export default function ContactsPage() {
   const fetchContacts = async () => {
     setLoading(true);
     const params = new URLSearchParams();
-    // Note: API currently supports search by name and email only
-    // Phone and company search requires API enhancement (blocked: requires API support)
-    if (debouncedSearch) params.append("search", debouncedSearch);
     if (stageFilter) params.append("stage", stageFilter);
     if (ownerFilter) params.append("ownerUserId", ownerFilter);
     if (vehicleFilter) params.append("vehicle", vehicleFilter);
@@ -67,6 +98,7 @@ export default function ContactsPage() {
     const response = await fetch(`/api/contacts?${params}`);
     const data = await response.json();
     setContacts(data);
+    setFilteredContacts(data);
     setLoading(false);
   };
 
@@ -139,12 +171,17 @@ export default function ContactsPage() {
 
         <Card className="mb-6">
           <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            {/* Search Input */}
+            <div>
               <Input
                 placeholder="Search by name, email, phone, or company..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
+            </div>
+
+            {/* Filter Dropdowns */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <Select
                 options={stageOptions}
                 value={stageFilter}
@@ -166,6 +203,7 @@ export default function ContactsPage() {
                 onChange={(e) => setTypeFilter(e.target.value)}
               />
             </div>
+
             {(search || stageFilter || ownerFilter || vehicleFilter || typeFilter) && (
               <div className="flex justify-end">
                 <Button
@@ -182,7 +220,7 @@ export default function ContactsPage() {
         <Card>
           {loading ? (
             <p>Loading...</p>
-          ) : contacts.length === 0 ? (
+          ) : filteredContacts.length === 0 ? (
             <p className="text-gray-500 text-center py-8">No contacts found</p>
           ) : (
             <div className="overflow-x-auto">
@@ -205,7 +243,7 @@ export default function ContactsPage() {
                       Vehicle
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Touch
+                      Last Activity
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -213,12 +251,12 @@ export default function ContactsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {contacts.map((contact) => (
+                  {filteredContacts.map((contact) => (
                     <tr
                       key={contact.id}
                       className={`cursor-pointer transition-all duration-150 ${
                         hoveredRowId === contact.id
-                          ? "bg-gray-50 shadow-md border-l-4 border-l-blue-500"
+                          ? "bg-blue-50 shadow-md border-l-4 border-l-blue-500"
                           : "hover:bg-gray-50"
                       }`}
                       onMouseEnter={() => setHoveredRowId(contact.id)}
@@ -255,7 +293,9 @@ export default function ContactsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {contact.lastTouchAt ? (
-                          <span>Touch • {formatRelativeTime(contact.lastTouchAt)}</span>
+                          <span className="text-gray-600">
+                            {formatRelativeTime(contact.lastTouchAt)}
+                          </span>
                         ) : (
                           <span className="text-gray-400">-</span>
                         )}
@@ -267,7 +307,7 @@ export default function ContactsPage() {
                               e.stopPropagation();
                               router.push(`/contacts/${contact.id}`);
                             }}
-                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs font-medium"
+                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
                           >
                             Open
                           </button>

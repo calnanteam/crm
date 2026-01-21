@@ -70,8 +70,10 @@ export async function GET(request: NextRequest) {
     const vehicle = searchParams.get("vehicle");
     const contactType = searchParams.get("contactType");
     const search = searchParams.get("search");
+    const cursor = searchParams.get("cursor");
+    const sort = searchParams.get("sort");
     const skip = parseInt(searchParams.get("skip") || "0");
-    const take = parseInt(searchParams.get("take") || "50");
+    const take = Math.min(parseInt(searchParams.get("take") || "50"), 100);
 
     const where: any = {};
 
@@ -97,19 +99,83 @@ export async function GET(request: NextRequest) {
       where.OR = searchConditions;
     }
 
-    const contacts = await prisma.contact.findMany({
+    // Determine if client wants cursor pagination (new format) or offset pagination (old format)
+    const useCursorPagination = cursor !== null || sort !== null;
+
+    let orderBy: any;
+    
+    if (useCursorPagination && sort) {
+      // Parse sort parameter for cursor pagination (e.g., "lastTouchAt_desc", "displayName_asc")
+      const [sortField, sortOrder] = sort.split("_");
+      const orderByArray: any[] = [];
+      
+      // Map sort field to actual field names
+      const sortFieldMap: Record<string, string> = {
+        lastTouchAt: "lastTouchAt",
+        displayName: "displayName",
+        createdAt: "createdAt",
+        updatedAt: "updatedAt",
+      };
+      
+      const actualSortField = sortFieldMap[sortField] || "lastTouchAt";
+      const actualSortOrder = sortOrder === "asc" ? "asc" : "desc";
+      
+      // Add primary sort field (handling nulls for nullable fields)
+      if (actualSortField === "lastTouchAt") {
+        orderByArray.push({ [actualSortField]: { sort: actualSortOrder, nulls: "last" } });
+      } else {
+        orderByArray.push({ [actualSortField]: actualSortOrder });
+      }
+      // Add id as tie-breaker for stable pagination
+      orderByArray.push({ id: actualSortOrder });
+      
+      orderBy = orderByArray;
+    } else {
+      // Default ordering for backward compatibility
+      orderBy = { updatedAt: "desc" };
+    }
+
+    const findManyOptions: any = {
       where,
       include: {
         owner: true,
         proposalOwner: true,
         organization: true,
       },
-      orderBy: { updatedAt: "desc" },
-      skip,
-      take: Math.min(take, 100),
-    });
+      orderBy,
+    };
 
-    return NextResponse.json(contacts);
+    if (useCursorPagination) {
+      // Cursor-based pagination (new format)
+      findManyOptions.take = take + 1; // Fetch one extra to determine if there's a next page
+      
+      if (cursor) {
+        findManyOptions.cursor = { id: cursor };
+        findManyOptions.skip = 1; // Skip the cursor item itself
+      }
+
+      const contacts = await prisma.contact.findMany(findManyOptions);
+
+      // Check if there are more items
+      const hasNextPage = contacts.length > take;
+      const items = hasNextPage ? contacts.slice(0, take) : contacts;
+      const nextCursor = hasNextPage ? items[items.length - 1].id : null;
+
+      return NextResponse.json({
+        items,
+        nextCursor,
+        hasNextPage,
+      });
+    } else {
+      // Offset-based pagination (old format for backward compatibility)
+      findManyOptions.skip = skip;
+      findManyOptions.take = take;
+
+      const contacts = await prisma.contact.findMany(findManyOptions);
+
+      // Return array format for backward compatibility
+      return NextResponse.json(contacts);
+    }
   } catch (error) {
     console.error("Error fetching contacts:", error);
     return NextResponse.json(
