@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
       contactId: body.contactId,
     };
     
-    // Set completedAt if status is DONE
-    if (taskData.status === "DONE") {
+    // Set completedAt for closed statuses (DONE or CANCELLED)
+    if (taskData.status === "DONE" || taskData.status === "CANCELLED") {
       taskData.completedAt = new Date();
     }
     
