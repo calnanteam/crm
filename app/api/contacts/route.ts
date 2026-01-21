@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { normalizePhone } from "@/lib/utils/phone";
 
 // Validation schema for contact creation
 const createContactSchema = z.object({
@@ -79,12 +80,21 @@ export async function GET(request: NextRequest) {
     if (vehicle) where.vehicle = vehicle;
     if (contactType) where.types = { has: contactType };
     if (search) {
-      where.OR = [
+      const searchNormalized = normalizePhone(search);
+      const searchConditions: any[] = [
         { firstName: { contains: search, mode: "insensitive" } },
         { lastName: { contains: search, mode: "insensitive" } },
         { displayName: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
+        { organization: { name: { contains: search, mode: "insensitive" } } },
       ];
+      
+      // If search contains any digits, also search normalized phone numbers
+      if (searchNormalized) {
+        searchConditions.push({ phoneNormalized: { contains: searchNormalized } });
+      }
+      
+      where.OR = searchConditions;
     }
 
     const contacts = await prisma.contact.findMany({
@@ -123,6 +133,7 @@ export async function POST(request: NextRequest) {
         displayName: validatedData.displayName,
         email: validatedData.email,
         phone: validatedData.phone,
+        phoneNormalized: normalizePhone(validatedData.phone),
         city: validatedData.city,
         region: validatedData.region,
         country: validatedData.country || "Canada",

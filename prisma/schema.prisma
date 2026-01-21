@@ -152,6 +152,7 @@ model Contact {
   displayName         String?
   email               String?
   phone               String?
+  phoneNormalized     String?  // Digits only for efficient search
   city                String?
   region              String?  // e.g., AB, BC, SK
   country             String?  @default("Canada")
@@ -200,9 +201,14 @@ model Contact {
 
   @@index([email])
   @@index([phone])
+  @@index([phoneNormalized])
+  @@index([firstName])
+  @@index([lastName])
+  @@index([displayName])
   @@index([stage])
   @@index([ownerUserId])
   @@index([vehicle])
+  @@index([organizationId])
 }
 
 model Task {
