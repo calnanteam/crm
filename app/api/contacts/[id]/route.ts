@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// Helper function to normalize phone numbers (digits only)
+function normalizePhone(phone: string | undefined | null): string | undefined {
+  if (!phone) return undefined;
+  const normalized = phone.replace(/\D/g, '');
+  return normalized || undefined;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,6 +65,11 @@ export async function PATCH(
     
     if (body.nextTouchAt) {
       updateData.nextTouchAt = new Date(body.nextTouchAt);
+    }
+
+    // Normalize phone if it's being updated
+    if (body.phone !== undefined) {
+      updateData.phoneNormalized = normalizePhone(body.phone);
     }
 
     if (body.stage && body.stage !== body.oldStage) {

@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
+// Helper function to normalize phone numbers (digits only)
+function normalizePhone(phone: string | undefined | null): string | undefined {
+  if (!phone) return undefined;
+  const normalized = phone.replace(/\D/g, '');
+  return normalized || undefined;
+}
+
 // Validation schema for contact creation
 const createContactSchema = z.object({
   firstName: z.string().optional(),
@@ -79,12 +86,21 @@ export async function GET(request: NextRequest) {
     if (vehicle) where.vehicle = vehicle;
     if (contactType) where.types = { has: contactType };
     if (search) {
-      where.OR = [
+      const searchNormalized = normalizePhone(search);
+      const searchConditions: any[] = [
         { firstName: { contains: search, mode: "insensitive" } },
         { lastName: { contains: search, mode: "insensitive" } },
         { displayName: { contains: search, mode: "insensitive" } },
         { email: { contains: search, mode: "insensitive" } },
+        { organization: { name: { contains: search, mode: "insensitive" } } },
       ];
+      
+      // If search looks like it contains digits, also search phone
+      if (searchNormalized) {
+        searchConditions.push({ phoneNormalized: { contains: searchNormalized } });
+      }
+      
+      where.OR = searchConditions;
     }
 
     const contacts = await prisma.contact.findMany({
@@ -123,6 +139,7 @@ export async function POST(request: NextRequest) {
         displayName: validatedData.displayName,
         email: validatedData.email,
         phone: validatedData.phone,
+        phoneNormalized: normalizePhone(validatedData.phone),
         city: validatedData.city,
         region: validatedData.region,
         country: validatedData.country || "Canada",
