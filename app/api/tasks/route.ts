@@ -8,6 +8,7 @@ export async function GET(request: NextRequest) {
     const priority = searchParams.get("priority");
     const assignedToUserId = searchParams.get("assignedToUserId");
     const contactId = searchParams.get("contactId");
+    const q = searchParams.get("q");
 
     const where: any = {};
 
@@ -15,6 +16,14 @@ export async function GET(request: NextRequest) {
     if (priority) where.priority = priority;
     if (assignedToUserId) where.assignedToUserId = assignedToUserId;
     if (contactId) where.contactId = contactId;
+    
+    // Add search functionality for title and description
+    if (q && q.trim()) {
+      where.OR = [
+        { title: { contains: q.trim(), mode: "insensitive" } },
+        { description: { contains: q.trim(), mode: "insensitive" } },
+      ];
+    }
 
     const tasks = await prisma.task.findMany({
       where,
@@ -43,16 +52,23 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     
+    const taskData: any = {
+      title: body.title,
+      description: body.description,
+      status: body.status || "OPEN",
+      priority: body.priority || "MEDIUM",
+      dueAt: body.dueAt ? new Date(body.dueAt) : null,
+      assignedToUserId: body.assignedToUserId,
+      contactId: body.contactId,
+    };
+    
+    // Set completedAt for closed statuses (DONE or CANCELLED)
+    if (taskData.status === "DONE" || taskData.status === "CANCELLED") {
+      taskData.completedAt = new Date();
+    }
+    
     const task = await prisma.task.create({
-      data: {
-        title: body.title,
-        description: body.description,
-        status: body.status || "OPEN",
-        priority: body.priority || "MEDIUM",
-        dueAt: body.dueAt ? new Date(body.dueAt) : null,
-        assignedToUserId: body.assignedToUserId,
-        contactId: body.contactId,
-      },
+      data: taskData,
       include: {
         assignedTo: true,
         contact: true,

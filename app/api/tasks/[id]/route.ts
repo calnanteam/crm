@@ -15,8 +15,14 @@ export async function PATCH(
       updateData.dueAt = new Date(body.dueAt);
     }
     
-    if (body.status === "DONE" && !body.completedAt) {
+    // Set completedAt for closed statuses (DONE or CANCELLED)
+    if (body.status && (body.status === "DONE" || body.status === "CANCELLED") && !body.completedAt) {
       updateData.completedAt = new Date();
+    }
+    
+    // Clear completedAt for open statuses (OPEN or IN_PROGRESS)
+    if (body.status && (body.status === "OPEN" || body.status === "IN_PROGRESS")) {
+      updateData.completedAt = null;
     }
 
     const task = await prisma.task.update({
