@@ -6,8 +6,6 @@ import Link from "next/link";
 import { Navigation } from "../../components/Navigation";
 import { Card } from "../../components/Card";
 import { ContactStageBadge } from "../../components/ContactStageBadge";
-import { ActivityTimelineItem } from "../../components/ActivityTimelineItem";
-import { TaskListItem } from "../../components/TaskListItem";
 import { Button } from "../../components/Button";
 import { Modal } from "../../components/Modal";
 import { TextArea } from "../../components/TextArea";
@@ -34,7 +32,6 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [taskFilter, setTaskFilter] = useState<"all" | "open" | "completed">("all");
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
-  const stickyHeaderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     params.then(p => {
@@ -229,7 +226,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       
       {/* Sticky Header */}
       {isHeaderSticky && (
-        <div ref={stickyHeaderRef} className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-40">
+        <div className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center space-x-4 min-w-0 flex-1">
@@ -398,7 +395,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                                   display: '-webkit-box',
                                   WebkitLineClamp: 3,
                                   WebkitBoxOrient: 'vertical',
-                                  overflow: 'hidden'
+                                  overflow: 'hidden',
+                                  maxHeight: '4.5em', // Fallback: ~3 lines at 1.5em line-height
                                 } as React.CSSProperties : undefined}
                               >
                                 {activity.body}
@@ -407,6 +405,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                                 <button
                                   onClick={() => toggleActivityExpanded(activity.id)}
                                   className="text-sm text-blue-600 hover:text-blue-700 mt-1 font-medium"
+                                  aria-expanded={isExpanded}
                                 >
                                   {isExpanded ? "Show less" : "Show more"}
                                 </button>
@@ -448,8 +447,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             <Card title="Tasks">
               <div className="space-y-4">
                 {/* Filter Tabs */}
-                <div className="flex space-x-1 border-b border-gray-200">
+                <div className="flex space-x-1 border-b border-gray-200" role="tablist">
                   <button
+                    role="tab"
+                    aria-selected={taskFilter === "all"}
+                    aria-controls="tasks-panel"
                     onClick={() => setTaskFilter("all")}
                     className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                       taskFilter === "all"
@@ -460,6 +462,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     All ({totalTaskCount})
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={taskFilter === "open"}
+                    aria-controls="tasks-panel"
                     onClick={() => setTaskFilter("open")}
                     className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                       taskFilter === "open"
@@ -470,6 +475,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                     Open ({sortedOpenTasks.length})
                   </button>
                   <button
+                    role="tab"
+                    aria-selected={taskFilter === "completed"}
+                    aria-controls="tasks-panel"
                     onClick={() => setTaskFilter("completed")}
                     className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
                       taskFilter === "completed"
@@ -483,7 +491,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
                 {/* Tasks List */}
                 {displayedTasks.length > 0 ? (
-                  <div className="space-y-2">
+                  <div id="tasks-panel" role="tabpanel" className="space-y-2">
                     {displayedTasks.map((task: any) => {
                       const isCompleted = task.status === "DONE";
                       return (
