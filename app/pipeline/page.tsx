@@ -122,9 +122,10 @@ export default function PipelinePage() {
   // Helper: Check if a date is today in local timezone
   const isToday = (date: Date): boolean => {
     const today = new Date();
-    return date.getDate() === today.getDate() &&
-           date.getMonth() === today.getMonth() &&
-           date.getFullYear() === today.getFullYear();
+    const checkDate = new Date(date);
+    return checkDate.getDate() === today.getDate() &&
+           checkDate.getMonth() === today.getMonth() &&
+           checkDate.getFullYear() === today.getFullYear();
   };
 
   // Helper: Get activity type label
@@ -188,7 +189,7 @@ export default function PipelinePage() {
         setSelectedContactId(visibleContacts[0].id);
       }
     }
-  }, [loading, contacts, searchQuery]);
+  }, [loading, contacts, searchQuery, selectedContactId]);
 
   // Effect: Keyboard navigation
   useEffect(() => {
@@ -527,7 +528,7 @@ export default function PipelinePage() {
         {/* Filters - Sticky */}
         <div className="sticky top-0 z-10 bg-white pb-4 mb-2">
           <Card className="shadow-md">
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
               <input
                 type="text"
                 placeholder="Search by name or email..."
@@ -566,32 +567,36 @@ export default function PipelinePage() {
           </div>
         ) : (
           <div className="flex gap-4 overflow-x-auto pb-4">
-            {stageGroups.map((group) => {
-              const groupContacts = getContactsByStageGroup(group.stages);
-              return (
-                <div
-                  key={group.title}
-                  className="flex-shrink-0 w-80"
-                  style={{ minWidth: "20rem" }}
-                >
-                  <div className={`rounded-lg border-2 ${group.color} p-4 h-full`}>
-                    <div className="mb-4">
-                      <h3 className="text-lg font-semibold text-gray-900">{group.title}</h3>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {groupContacts.length} contact{groupContacts.length !== 1 ? "s" : ""}
-                      </p>
-                    </div>
+            {(() => {
+              // Compute visible contacts once for performance
+              const visibleContacts = getVisibleContacts();
+              const first60ContactIds = new Set(visibleContacts.slice(0, 60).map(c => c.id));
+              
+              return stageGroups.map((group) => {
+                const groupContacts = getContactsByStageGroup(group.stages);
+                return (
+                  <div
+                    key={group.title}
+                    className="flex-shrink-0 w-80"
+                    style={{ minWidth: "20rem" }}
+                  >
+                    <div className={`rounded-lg border-2 ${group.color} p-4 h-full`}>
+                      <div className="mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">{group.title}</h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {groupContacts.length} contact{groupContacts.length !== 1 ? "s" : ""}
+                        </p>
+                      </div>
 
-                    <div className="space-y-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
-                      {groupContacts.length === 0 ? (
-                        <p className="text-sm text-gray-400 text-center py-8">No contacts</p>
-                      ) : (
-                        groupContacts.map((contact) => {
-                          const isSelected = contact.id === selectedContactId;
-                          const visibleContacts = getVisibleContacts();
-                          const isInFirst60 = visibleContacts.slice(0, 60).some(c => c.id === contact.id);
-                          const signals = taskSignals[contact.id];
-                          const showSignals = isInFirst60 && signals;
+                      <div className="space-y-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                        {groupContacts.length === 0 ? (
+                          <p className="text-sm text-gray-400 text-center py-8">No contacts</p>
+                        ) : (
+                          groupContacts.map((contact) => {
+                            const isSelected = contact.id === selectedContactId;
+                            const isInFirst60 = first60ContactIds.has(contact.id);
+                            const signals = taskSignals[contact.id];
+                            const showSignals = isInFirst60 && signals;
                           
                           return (
                             <div
@@ -741,7 +746,8 @@ export default function PipelinePage() {
                   </div>
                 </div>
               );
-            })}
+            });
+          })()}
           </div>
         )}
       </div>
