@@ -111,8 +111,8 @@ function ContactsPageContent() {
     if (sortBy && sortBy !== "lastTouchAt_desc") params.set("sort", sortBy);
     
     const newUrl = params.toString() ? `/contacts?${params}` : "/contacts";
-    window.history.replaceState({}, "", newUrl);
-  }, [debouncedSearch, stageFilter, ownerFilter, vehicleFilter, typeFilter, sortBy]);
+    router.replace(newUrl, { scroll: false });
+  }, [debouncedSearch, stageFilter, ownerFilter, vehicleFilter, typeFilter, sortBy, router]);
 
   useEffect(() => {
     fetchUsers();
@@ -163,7 +163,7 @@ function ContactsPageContent() {
     if (reset) {
       setContacts(data.items || []);
     } else {
-      setContacts([...contacts, ...(data.items || [])]);
+      setContacts(prev => [...prev, ...(data.items || [])]);
     }
     
     setNextCursor(data.nextCursor);
@@ -202,14 +202,16 @@ function ContactsPageContent() {
   const handleSaveView = async () => {
     if (!newViewName.trim()) return;
     
-    const filtersJson = JSON.stringify({
-      q: debouncedSearch || undefined,
-      stage: stageFilter || undefined,
-      owner: ownerFilter || undefined,
-      vehicle: vehicleFilter || undefined,
-      type: typeFilter || undefined,
-      sort: sortBy !== "lastTouchAt_desc" ? sortBy : undefined,
-    });
+    // Build filters object, only including non-empty values
+    const filters: Record<string, string> = {};
+    if (debouncedSearch) filters.q = debouncedSearch;
+    if (stageFilter) filters.stage = stageFilter;
+    if (ownerFilter) filters.owner = ownerFilter;
+    if (vehicleFilter) filters.vehicle = vehicleFilter;
+    if (typeFilter) filters.type = typeFilter;
+    if (sortBy && sortBy !== "lastTouchAt_desc") filters.sort = sortBy;
+    
+    const filtersJson = JSON.stringify(filters);
     
     try {
       const response = await fetch("/api/contacts/views", {

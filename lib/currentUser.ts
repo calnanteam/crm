@@ -1,6 +1,11 @@
 /**
  * Auth helper to get current user
- * TODO: Replace with proper session-based user identification
+ * 
+ * SECURITY WARNING: This is a placeholder implementation that returns the first active user.
+ * In production, this MUST be replaced with proper session-based user identification
+ * to prevent unauthorized access to user-specific resources like saved views.
+ * 
+ * TODO: Implement proper user session tracking with authentication tokens/cookies
  */
 
 import { prisma } from "@/lib/prisma";

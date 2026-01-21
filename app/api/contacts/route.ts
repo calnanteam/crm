@@ -113,8 +113,12 @@ export async function GET(request: NextRequest) {
     const actualSortField = sortFieldMap[sortField] || "lastTouchAt";
     const actualSortOrder = sortOrder === "asc" ? "asc" : "desc";
     
-    // Add primary sort field (handling nulls)
-    orderBy.push({ [actualSortField]: { sort: actualSortOrder, nulls: "last" } });
+    // Add primary sort field (handling nulls for nullable fields)
+    if (actualSortField === "lastTouchAt") {
+      orderBy.push({ [actualSortField]: { sort: actualSortOrder, nulls: "last" } });
+    } else {
+      orderBy.push({ [actualSortField]: actualSortOrder });
+    }
     // Add id as tie-breaker for stable pagination
     orderBy.push({ id: actualSortOrder });
 
