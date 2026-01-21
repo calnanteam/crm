@@ -52,6 +52,13 @@ interface User {
   displayName?: string;
 }
 
+interface Task {
+  id: string;
+  title: string;
+  status: string;
+  dueAt?: string | Date | null;
+}
+
 interface Contact {
   id: string;
   firstName?: string;
@@ -66,6 +73,11 @@ interface Contact {
   lastActivity?: Activity | null;
 }
 
+interface TaskSignals {
+  openCount: number;
+  overdueCount: number;
+}
+
 export default function PipelinePage() {
   const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -78,6 +90,7 @@ export default function PipelinePage() {
   const [error, setError] = useState<string | null>(null);
   const [addTaskModalOpen, setAddTaskModalOpen] = useState(false);
   const [selectedContactForTask, setSelectedContactForTask] = useState<Contact | null>(null);
+  const [taskSignals, setTaskSignals] = useState<Record<string, TaskSignals>>({});
 
   // Helper: Format relative time (e.g., "3 hours ago")
   const formatRelativeTime = (date: string | Date): string => {
@@ -131,6 +144,40 @@ export default function PipelinePage() {
     setUsers(data);
   };
 
+  const fetchTaskSignalsForContact = async (contactId: string): Promise<TaskSignals> => {
+    try {
+      const response = await fetch(`/api/tasks?contactId=${contactId}&status=OPEN`);
+      const tasks: Task[] = await response.json();
+      
+      const now = new Date();
+      const openCount = tasks.length;
+      const overdueCount = tasks.filter((task) => 
+        task.dueAt && new Date(task.dueAt) < now
+      ).length;
+      
+      return { openCount, overdueCount };
+    } catch (err) {
+      console.error(`Failed to fetch task signals for contact ${contactId}:`, err);
+      return { openCount: 0, overdueCount: 0 };
+    }
+  };
+
+  const fetchTaskSignalsForAllContacts = async (contactIds: string[]) => {
+    const signals = await Promise.all(
+      contactIds.map(async (id) => {
+        const taskSignal = await fetchTaskSignalsForContact(id);
+        return { id, signals: taskSignal };
+      })
+    );
+    
+    const signalsMap: Record<string, TaskSignals> = {};
+    signals.forEach(({ id, signals }) => {
+      signalsMap[id] = signals;
+    });
+    
+    setTaskSignals(signalsMap);
+  };
+
   const fetchContacts = async () => {
     setLoading(true);
     const params = new URLSearchParams();
@@ -159,6 +206,10 @@ export default function PipelinePage() {
     );
     
     setContacts(contactsWithActivities);
+    
+    // Fetch task signals for all contacts
+    await fetchTaskSignalsForAllContacts(contactsWithActivities.map((c: Contact) => c.id));
+    
     setLoading(false);
   };
 
@@ -268,6 +319,17 @@ export default function PipelinePage() {
   const handleCloseTaskModal = () => {
     setAddTaskModalOpen(false);
     setSelectedContactForTask(null);
+  };
+
+  const handleTaskCreated = async () => {
+    // Refresh task signals for the contact that had a task created
+    if (selectedContactForTask) {
+      const signals = await fetchTaskSignalsForContact(selectedContactForTask.id);
+      setTaskSignals(prev => ({
+        ...prev,
+        [selectedContactForTask.id]: signals,
+      }));
+    }
   };
 
   const handleClearFilters = () => {
@@ -515,6 +577,20 @@ export default function PipelinePage() {
                               </div>
                             )}
 
+                            {/* Task Signals */}
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">Signals:</span>{" "}
+                                <span className="text-gray-900">
+                                  Open tasks: {taskSignals[contact.id]?.openCount || 0}
+                                </span>
+                                {" / "}
+                                <span className={taskSignals[contact.id]?.overdueCount ? "text-red-600 font-medium" : "text-gray-900"}>
+                                  Overdue: {taskSignals[contact.id]?.overdueCount || 0}
+                                </span>
+                              </div>
+                            </div>
+
                             {/* Last Activity - Polished with truncation */}
                             <div className="mt-2 pt-2 border-t border-gray-100">
                               {contact.lastActivity ? (
@@ -554,6 +630,7 @@ export default function PipelinePage() {
             `${selectedContactForTask.firstName || ""} ${selectedContactForTask.lastName || ""}`.trim() ||
             "Unknown"
           }
+          onTaskCreated={handleTaskCreated}
         />
       )}
     </>
