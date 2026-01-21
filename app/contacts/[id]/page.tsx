@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Navigation } from "../../components/Navigation";
 import { Card } from "../../components/Card";
 import { ContactStageBadge } from "../../components/ContactStageBadge";
@@ -29,6 +30,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [taskPriority, setTaskPriority] = useState("MEDIUM");
   const [newStage, setNewStage] = useState("");
   const [contactId, setContactId] = useState<string | null>(null);
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(new Set());
+  const [taskFilter, setTaskFilter] = useState<"all" | "open" | "completed">("all");
+  const [isHeaderSticky, setIsHeaderSticky] = useState(false);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const stickyHeaderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     params.then(p => {
@@ -37,6 +43,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       fetchUsers();
     });
   }, [params]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (headerRef.current) {
+        const headerBottom = headerRef.current.getBoundingClientRect().bottom;
+        setIsHeaderSticky(headerBottom <= 0);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   const fetchContact = async (id: string) => {
     const response = await fetch(`/api/contacts/${id}`);
@@ -125,6 +143,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     if (contactId) fetchContact(contactId);
   };
 
+  const toggleActivityExpanded = (activityId: string) => {
+    setExpandedActivities((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(activityId)) {
+        newSet.delete(activityId);
+      } else {
+        newSet.add(activityId);
+      }
+      return newSet;
+    });
+  };
+
   if (loading || !contact) {
     return (
       <>
@@ -138,8 +168,25 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   const contactName = contact.displayName || `${contact.firstName || ""} ${contact.lastName || ""}`.trim() || "Unknown Contact";
   
-  const openTasks = contact.tasks?.filter((t: any) => t.status === "OPEN" || t.status === "IN_PROGRESS") || [];
-  const completedTasks = contact.tasks?.filter((t: any) => t.status === "DONE") || [];
+  const allOpenTasks = contact.tasks?.filter((t: any) => t.status === "OPEN" || t.status === "IN_PROGRESS") || [];
+  const allCompletedTasks = contact.tasks?.filter((t: any) => t.status === "DONE") || [];
+
+  // Sort open tasks by due date (nulls last)
+  const sortedOpenTasks = [...allOpenTasks].sort((a: any, b: any) => {
+    if (!a.dueAt && !b.dueAt) return 0;
+    if (!a.dueAt) return 1;
+    if (!b.dueAt) return -1;
+    return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
+  });
+
+  // Filter tasks based on selected filter
+  const displayedTasks = 
+    taskFilter === "open" ? sortedOpenTasks :
+    taskFilter === "completed" ? allCompletedTasks :
+    [...sortedOpenTasks, ...allCompletedTasks];
+
+  const openTasks = sortedOpenTasks;
+  const completedTasks = allCompletedTasks;
 
   const proposalStages = ["PROPOSAL_TO_BE_DEVELOPED", "PROPOSAL_IN_PROGRESS", "PROPOSAL_READY_FOR_FORMATTING", "PROPOSAL_SENT"];
   const isInProposal = proposalStages.includes(contact.stage);
@@ -172,8 +219,31 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   return (
     <>
       <Navigation />
+      
+      {/* Sticky Header */}
+      {isHeaderSticky && (
+        <div ref={stickyHeaderRef} className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 shadow-sm z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center space-x-4 min-w-0 flex-1">
+                <h2 className="text-xl font-bold text-gray-900 truncate">{contactName}</h2>
+                <ContactStageBadge stage={contact.stage} />
+                <span className="text-sm text-gray-500 hidden md:inline">Vehicle: {contact.vehicle}</span>
+              </div>
+              <div className="flex space-x-2 flex-shrink-0">
+                <Link href={`/contacts/${contactId}/edit`}>
+                  <Button variant="secondary">Edit</Button>
+                </Link>
+                <Button onClick={() => setShowNoteModal(true)}>Add Note</Button>
+                <Button onClick={() => setShowTaskModal(true)}>Add Task</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-start mb-8">
+        <div ref={headerRef} className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{contactName}</h1>
             <div className="flex items-center space-x-4 mt-2">
@@ -187,9 +257,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             </div>
           </div>
           <div className="flex space-x-2">
-            <Button variant="secondary" onClick={() => router.push(`/contacts/${contactId}/edit`)}>
-              Edit
-            </Button>
+            <Link href={`/contacts/${contactId}/edit`}>
+              <Button variant="secondary">Edit</Button>
+            </Link>
             <Button onClick={() => setShowNoteModal(true)}>Add Note</Button>
             <Button onClick={() => setShowTaskModal(true)}>Add Task</Button>
             <Button variant="secondary" onClick={() => setShowStageModal(true)}>
@@ -271,9 +341,80 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             <Card title="Activity Timeline">
               {contact.activities && contact.activities.length > 0 ? (
                 <div className="space-y-4 divide-y divide-gray-200">
-                  {contact.activities.map((activity: any) => (
-                    <ActivityTimelineItem key={activity.id} activity={activity} />
-                  ))}
+                  {contact.activities.map((activity: any) => {
+                    const isExpanded = expandedActivities.has(activity.id);
+                    const hasLongBody = activity.body && activity.body.length > 200;
+                    
+                    return (
+                      <div key={activity.id} className="flex space-x-3 py-3">
+                        <div className="flex-shrink-0">
+                          <span className="text-2xl">
+                            {activity.type === "NOTE" ? "📝" :
+                             activity.type === "CALL" ? "📞" :
+                             activity.type === "MEETING" ? "🤝" :
+                             activity.type === "EMAIL_LOGGED" ? "📧" :
+                             activity.type === "TEXT_LOGGED" ? "💬" :
+                             activity.type === "DOCUMENT_SENT" ? "📤" :
+                             activity.type === "DOCUMENT_RECEIVED" ? "📥" :
+                             activity.type === "STATUS_CHANGE" ? "🔄" :
+                             activity.type === "TASK_CREATED" ? "✅" :
+                             activity.type === "TASK_COMPLETED" ? "✔️" : "📝"}
+                          </span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2">
+                            <p className="text-sm font-medium text-gray-900">
+                              {activity.type === "NOTE" ? "Note" :
+                               activity.type === "CALL" ? "Call" :
+                               activity.type === "MEETING" ? "Meeting" :
+                               activity.type === "EMAIL_LOGGED" ? "Email" :
+                               activity.type === "TEXT_LOGGED" ? "Text" :
+                               activity.type === "DOCUMENT_SENT" ? "Document Sent" :
+                               activity.type === "DOCUMENT_RECEIVED" ? "Document Received" :
+                               activity.type === "STATUS_CHANGE" ? "Status Change" :
+                               activity.type === "TASK_CREATED" ? "Task Created" :
+                               activity.type === "TASK_COMPLETED" ? "Task Completed" : activity.type}
+                            </p>
+                            <span className="text-xs text-gray-500">
+                              {new Date(activity.occurredAt).toLocaleDateString()} at{" "}
+                              {new Date(activity.occurredAt).toLocaleTimeString()}
+                            </span>
+                          </div>
+                          {activity.subject && (
+                            <p className="text-sm font-medium text-gray-700 mt-1">{activity.subject}</p>
+                          )}
+                          {activity.body && (
+                            <div className="mt-1">
+                              <p 
+                                className="text-sm text-gray-600 whitespace-pre-wrap"
+                                style={!isExpanded && hasLongBody ? {
+                                  display: '-webkit-box',
+                                  WebkitLineClamp: 3,
+                                  WebkitBoxOrient: 'vertical',
+                                  overflow: 'hidden'
+                                } as React.CSSProperties : undefined}
+                              >
+                                {activity.body}
+                              </p>
+                              {hasLongBody && (
+                                <button
+                                  onClick={() => toggleActivityExpanded(activity.id)}
+                                  className="text-sm text-blue-600 hover:text-blue-700 mt-1 font-medium"
+                                >
+                                  {isExpanded ? "Show less" : "Show more"}
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {activity.actor && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              by {activity.actor.displayName || activity.actor.email}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-gray-500 text-sm">No activity yet</p>
@@ -297,52 +438,78 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </Card>
 
-            <Card title="Open Tasks">
-              {openTasks.length > 0 ? (
-                <div className="space-y-2">
-                  {openTasks.map((task: any) => (
-                    <div key={task.id} className="flex items-start space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={false}
-                        onChange={() => toggleTask(task.id, task.status)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{task.title}</p>
-                        {task.dueAt && (
-                          <p className="text-xs text-gray-500">
-                            Due: {new Date(task.dueAt).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+            <Card title="Tasks">
+              <div className="space-y-4">
+                {/* Filter Tabs */}
+                <div className="flex space-x-1 border-b border-gray-200">
+                  <button
+                    onClick={() => setTaskFilter("all")}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      taskFilter === "all"
+                        ? "border-blue-600 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    All ({displayedTasks.length})
+                  </button>
+                  <button
+                    onClick={() => setTaskFilter("open")}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      taskFilter === "open"
+                        ? "border-blue-600 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Open ({openTasks.length})
+                  </button>
+                  <button
+                    onClick={() => setTaskFilter("completed")}
+                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                      taskFilter === "completed"
+                        ? "border-blue-600 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    Completed ({completedTasks.length})
+                  </button>
                 </div>
-              ) : (
-                <p className="text-gray-500 text-sm">No open tasks</p>
-              )}
-            </Card>
 
-            {completedTasks.length > 0 && (
-              <Card title="Completed Tasks">
-                <div className="space-y-2">
-                  {completedTasks.slice(0, 5).map((task: any) => (
-                    <div key={task.id} className="flex items-start space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={true}
-                        onChange={() => toggleTask(task.id, task.status)}
-                        className="mt-1"
-                      />
-                      <div className="flex-1">
-                        <p className="text-sm text-gray-500 line-through">{task.title}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            )}
+                {/* Tasks List */}
+                {displayedTasks.length > 0 ? (
+                  <div className="space-y-2">
+                    {displayedTasks.map((task: any) => {
+                      const isCompleted = task.status === "DONE";
+                      return (
+                        <div key={task.id} className="flex items-start space-x-2">
+                          <input
+                            type="checkbox"
+                            checked={isCompleted}
+                            onChange={() => toggleTask(task.id, task.status)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <p className={`text-sm font-medium ${isCompleted ? "line-through text-gray-500" : ""}`}>
+                              {task.title}
+                            </p>
+                            {task.dueAt && (
+                              <p className="text-xs text-gray-500">
+                                Due: {new Date(task.dueAt).toLocaleDateString()}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">
+                    {taskFilter === "open" && "No open tasks"}
+                    {taskFilter === "completed" && "No completed tasks"}
+                    {taskFilter === "all" && "No tasks"}
+                  </p>
+                )}
+              </div>
+            </Card>
           </div>
         </div>
       </div>
