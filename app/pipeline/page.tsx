@@ -245,13 +245,22 @@ export default function PipelinePage() {
       const tasks: Task[] = await response.json();
       
       const now = new Date();
-      const openCount = tasks.length;
-      const overdueCount = tasks.filter((task) => 
-        task.dueAt && new Date(task.dueAt) < now
-      ).length;
-      const dueTodayCount = tasks.filter((task) =>
-        task.dueAt && isToday(new Date(task.dueAt))
-      ).length;
+      let openCount = 0;
+      let overdueCount = 0;
+      let dueTodayCount = 0;
+      
+      for (const task of tasks) {
+        openCount++;
+        if (task.dueAt) {
+          const dueDate = new Date(task.dueAt);
+          if (dueDate < now) {
+            overdueCount++;
+          }
+          if (isToday(dueDate)) {
+            dueTodayCount++;
+          }
+        }
+      }
       
       return { openCount, overdueCount, dueTodayCount };
     } catch (err) {
