@@ -45,10 +45,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   }, [params]);
 
   useEffect(() => {
+    let ticking = false;
+    
     const handleScroll = () => {
-      if (headerRef.current) {
-        const headerBottom = headerRef.current.getBoundingClientRect().bottom;
-        setIsHeaderSticky(headerBottom <= 0);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          if (headerRef.current) {
+            const headerBottom = headerRef.current.getBoundingClientRect().bottom;
+            setIsHeaderSticky(headerBottom <= 0);
+          }
+          ticking = false;
+        });
+        ticking = true;
       }
     };
 
@@ -185,8 +193,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     taskFilter === "completed" ? allCompletedTasks :
     [...sortedOpenTasks, ...allCompletedTasks];
 
-  const openTasks = sortedOpenTasks;
-  const completedTasks = allCompletedTasks;
+  const totalTaskCount = sortedOpenTasks.length + allCompletedTasks.length;
 
   const proposalStages = ["PROPOSAL_TO_BE_DEVELOPED", "PROPOSAL_IN_PROGRESS", "PROPOSAL_READY_FOR_FORMATTING", "PROPOSAL_SENT"];
   const isInProposal = proposalStages.includes(contact.stage);
@@ -450,7 +457,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         : "border-transparent text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    All ({displayedTasks.length})
+                    All ({totalTaskCount})
                   </button>
                   <button
                     onClick={() => setTaskFilter("open")}
@@ -460,7 +467,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         : "border-transparent text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    Open ({openTasks.length})
+                    Open ({sortedOpenTasks.length})
                   </button>
                   <button
                     onClick={() => setTaskFilter("completed")}
@@ -470,7 +477,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         : "border-transparent text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    Completed ({completedTasks.length})
+                    Completed ({allCompletedTasks.length})
                   </button>
                 </div>
 
