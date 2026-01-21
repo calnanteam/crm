@@ -11,33 +11,6 @@ import { Button } from "../components/Button";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-// Default hard-coded views
-const DEFAULT_VIEWS = [
-  { id: "all", name: "All Contacts", filtersJson: JSON.stringify({}) },
-  { 
-    id: "active", 
-    name: "Active Pipeline", 
-    filtersJson: JSON.stringify({ 
-      stage: "QUALIFIED_ACTIVE" 
-    }) 
-  },
-  { 
-    id: "proposals", 
-    name: "In Proposal", 
-    filtersJson: JSON.stringify({ 
-      stage: "PROPOSAL_IN_PROGRESS" 
-    }) 
-  },
-  { 
-    id: "core-investors", 
-    name: "CORE Investors", 
-    filtersJson: JSON.stringify({ 
-      vehicle: "CORE",
-      type: "INVESTOR_CASH"
-    }) 
-  },
-];
-
 function ContactsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -57,13 +30,6 @@ function ContactsPageContent() {
   const [vehicleFilter, setVehicleFilter] = useState(searchParams.get("vehicle") || "");
   const [typeFilter, setTypeFilter] = useState(searchParams.get("type") || "");
   const [sortBy, setSortBy] = useState(searchParams.get("sort") || "lastTouchAt_desc");
-  
-  // Saved views state
-  const [savedViews, setSavedViews] = useState<any[]>([]);
-  const [selectedView, setSelectedView] = useState<string | null>(null);
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [newViewName, setNewViewName] = useState("");
-  const [showViewMenu, setShowViewMenu] = useState(false);
   
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -116,7 +82,6 @@ function ContactsPageContent() {
 
   useEffect(() => {
     fetchUsers();
-    fetchSavedViews();
   }, []);
 
   useEffect(() => {
@@ -127,18 +92,6 @@ function ContactsPageContent() {
     const response = await fetch("/api/users");
     const data = await response.json();
     setUsers(data);
-  };
-
-  const fetchSavedViews = async () => {
-    try {
-      const response = await fetch("/api/contacts/views");
-      if (response.ok) {
-        const data = await response.json();
-        setSavedViews(data);
-      }
-    } catch (error) {
-      console.error("Error fetching saved views:", error);
-    }
   };
 
   const fetchContacts = async (reset = false) => {
@@ -160,14 +113,19 @@ function ContactsPageContent() {
     const response = await fetch(`/api/contacts?${params}`);
     const data = await response.json();
     
+    // Handle both old array format and new object format
+    const items = Array.isArray(data) ? data : (data.items || []);
+    const cursor = data.nextCursor || null;
+    const hasNext = data.hasNextPage || false;
+    
     if (reset) {
-      setContacts(data.items || []);
+      setContacts(items);
     } else {
-      setContacts(prev => [...prev, ...(data.items || [])]);
+      setContacts(prev => [...prev, ...items]);
     }
     
-    setNextCursor(data.nextCursor);
-    setHasNextPage(data.hasNextPage);
+    setNextCursor(cursor);
+    setHasNextPage(hasNext);
     setLoading(false);
     setLoadingMore(false);
   };
@@ -180,74 +138,6 @@ function ContactsPageContent() {
     setVehicleFilter("");
     setTypeFilter("");
     setSortBy("lastTouchAt_desc");
-    setSelectedView(null);
-  };
-
-  const handleSelectView = (viewId: string) => {
-    const view = [...DEFAULT_VIEWS, ...savedViews].find(v => v.id === viewId);
-    if (view) {
-      const filters = JSON.parse(view.filtersJson);
-      setSearch(filters.q || "");
-      setDebouncedSearch(filters.q || "");
-      setStageFilter(filters.stage || "");
-      setOwnerFilter(filters.owner || "");
-      setVehicleFilter(filters.vehicle || "");
-      setTypeFilter(filters.type || "");
-      setSortBy(filters.sort || "lastTouchAt_desc");
-      setSelectedView(viewId);
-      setShowViewMenu(false);
-    }
-  };
-
-  const handleSaveView = async () => {
-    if (!newViewName.trim()) return;
-    
-    // Build filters object, only including non-empty values
-    const filters: Record<string, string> = {};
-    if (debouncedSearch) filters.q = debouncedSearch;
-    if (stageFilter) filters.stage = stageFilter;
-    if (ownerFilter) filters.owner = ownerFilter;
-    if (vehicleFilter) filters.vehicle = vehicleFilter;
-    if (typeFilter) filters.type = typeFilter;
-    if (sortBy && sortBy !== "lastTouchAt_desc") filters.sort = sortBy;
-    
-    const filtersJson = JSON.stringify(filters);
-    
-    try {
-      const response = await fetch("/api/contacts/views", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newViewName, filtersJson }),
-      });
-      
-      if (response.ok) {
-        await fetchSavedViews();
-        setNewViewName("");
-        setShowSaveDialog(false);
-      }
-    } catch (error) {
-      console.error("Error saving view:", error);
-    }
-  };
-
-  const handleDeleteView = async (viewId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!confirm("Delete this saved view?")) return;
-    
-    try {
-      const response = await fetch(`/api/contacts/views/${viewId}`, {
-        method: "DELETE",
-      });
-      
-      if (response.ok) {
-        await fetchSavedViews();
-        if (selectedView === viewId) {
-          setSelectedView(null);
-        }
-      }
-    } catch (error) {
-      console.error("Error deleting view:", error);
-    }
   };
 
   const formatRelativeTime = (dateString: string | null | undefined) => {
@@ -306,11 +196,6 @@ function ContactsPageContent() {
     ...users.map((u) => ({ value: u.id, label: u.displayName || u.email })),
   ];
 
-  const allViews = [...DEFAULT_VIEWS, ...savedViews];
-  const currentViewName = selectedView 
-    ? allViews.find(v => v.id === selectedView)?.name 
-    : "Select a view...";
-
   return (
     <>
       <Navigation />
@@ -321,111 +206,6 @@ function ContactsPageContent() {
             New Contact
           </Button>
         </div>
-
-        {/* Saved Views Section */}
-        <Card className="mb-6">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowViewMenu(!showViewMenu);
-                }}
-                className="w-full px-4 py-2 text-left bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {currentViewName}
-              </button>
-              
-              {showViewMenu && (
-                <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                  <div className="py-1">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">
-                      Default Views
-                    </div>
-                    {DEFAULT_VIEWS.map((view) => (
-                      <button
-                        key={view.id}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectView(view.id);
-                        }}
-                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                      >
-                        {view.name}
-                      </button>
-                    ))}
-                    
-                    {savedViews.length > 0 && (
-                      <>
-                        <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase border-t mt-2">
-                          My Saved Views
-                        </div>
-                        {savedViews.map((view) => (
-                          <div
-                            key={view.id}
-                            className="flex items-center justify-between px-4 py-2 hover:bg-gray-100"
-                          >
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSelectView(view.id);
-                              }}
-                              className="flex-1 text-left"
-                            >
-                              {view.name}
-                            </button>
-                            <button
-                              onClick={(e) => handleDeleteView(view.id, e)}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowSaveDialog(true);
-              }}
-              className="whitespace-nowrap"
-            >
-              Save View
-            </Button>
-          </div>
-        </Card>
-
-        {/* Save View Dialog */}
-        {showSaveDialog && (
-          <Card className="mb-6 bg-blue-50">
-            <div className="space-y-4">
-              <h3 className="font-semibold">Save Current View</h3>
-              <Input
-                placeholder="View name..."
-                value={newViewName}
-                onChange={(e) => setNewViewName(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && handleSaveView()}
-              />
-              <div className="flex gap-2">
-                <Button onClick={handleSaveView}>
-                  Save
-                </Button>
-                <Button onClick={() => {
-                  setShowSaveDialog(false);
-                  setNewViewName("");
-                }}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
 
         {/* Filters Section */}
         <Card className="mb-6">

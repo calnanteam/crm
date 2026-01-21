@@ -71,7 +71,8 @@ export async function GET(request: NextRequest) {
     const contactType = searchParams.get("contactType");
     const search = searchParams.get("search");
     const cursor = searchParams.get("cursor");
-    const sort = searchParams.get("sort") || "lastTouchAt_desc";
+    const sort = searchParams.get("sort");
+    const skip = parseInt(searchParams.get("skip") || "0");
     const take = Math.min(parseInt(searchParams.get("take") || "50"), 100);
 
     const where: any = {};
@@ -98,29 +99,41 @@ export async function GET(request: NextRequest) {
       where.OR = searchConditions;
     }
 
-    // Parse sort parameter (e.g., "lastTouchAt_desc", "displayName_asc")
-    const [sortField, sortOrder] = sort.split("_");
-    const orderBy: any[] = [];
+    // Determine if client wants cursor pagination (new format) or offset pagination (old format)
+    const useCursorPagination = cursor !== null || sort !== null;
+
+    let orderBy: any;
     
-    // Map sort field to actual field names
-    const sortFieldMap: Record<string, string> = {
-      lastTouchAt: "lastTouchAt",
-      displayName: "displayName",
-      createdAt: "createdAt",
-      updatedAt: "updatedAt",
-    };
-    
-    const actualSortField = sortFieldMap[sortField] || "lastTouchAt";
-    const actualSortOrder = sortOrder === "asc" ? "asc" : "desc";
-    
-    // Add primary sort field (handling nulls for nullable fields)
-    if (actualSortField === "lastTouchAt") {
-      orderBy.push({ [actualSortField]: { sort: actualSortOrder, nulls: "last" } });
+    if (useCursorPagination && sort) {
+      // Parse sort parameter for cursor pagination (e.g., "lastTouchAt_desc", "displayName_asc")
+      const [sortField, sortOrder] = sort.split("_");
+      const orderByArray: any[] = [];
+      
+      // Map sort field to actual field names
+      const sortFieldMap: Record<string, string> = {
+        lastTouchAt: "lastTouchAt",
+        displayName: "displayName",
+        createdAt: "createdAt",
+        updatedAt: "updatedAt",
+      };
+      
+      const actualSortField = sortFieldMap[sortField] || "lastTouchAt";
+      const actualSortOrder = sortOrder === "asc" ? "asc" : "desc";
+      
+      // Add primary sort field (handling nulls for nullable fields)
+      if (actualSortField === "lastTouchAt") {
+        orderByArray.push({ [actualSortField]: { sort: actualSortOrder, nulls: "last" } });
+      } else {
+        orderByArray.push({ [actualSortField]: actualSortOrder });
+      }
+      // Add id as tie-breaker for stable pagination
+      orderByArray.push({ id: actualSortOrder });
+      
+      orderBy = orderByArray;
     } else {
-      orderBy.push({ [actualSortField]: actualSortOrder });
+      // Default ordering for backward compatibility
+      orderBy = { updatedAt: "desc" };
     }
-    // Add id as tie-breaker for stable pagination
-    orderBy.push({ id: actualSortOrder });
 
     const findManyOptions: any = {
       where,
@@ -130,27 +143,39 @@ export async function GET(request: NextRequest) {
         organization: true,
       },
       orderBy,
-      take: take + 1, // Fetch one extra to determine if there's a next page
     };
 
-    // If cursor is provided, use cursor-based pagination
-    if (cursor) {
-      findManyOptions.cursor = { id: cursor };
-      findManyOptions.skip = 1; // Skip the cursor item itself
+    if (useCursorPagination) {
+      // Cursor-based pagination (new format)
+      findManyOptions.take = take + 1; // Fetch one extra to determine if there's a next page
+      
+      if (cursor) {
+        findManyOptions.cursor = { id: cursor };
+        findManyOptions.skip = 1; // Skip the cursor item itself
+      }
+
+      const contacts = await prisma.contact.findMany(findManyOptions);
+
+      // Check if there are more items
+      const hasNextPage = contacts.length > take;
+      const items = hasNextPage ? contacts.slice(0, take) : contacts;
+      const nextCursor = hasNextPage ? items[items.length - 1].id : null;
+
+      return NextResponse.json({
+        items,
+        nextCursor,
+        hasNextPage,
+      });
+    } else {
+      // Offset-based pagination (old format for backward compatibility)
+      findManyOptions.skip = skip;
+      findManyOptions.take = take;
+
+      const contacts = await prisma.contact.findMany(findManyOptions);
+
+      // Return array format for backward compatibility
+      return NextResponse.json(contacts);
     }
-
-    const contacts = await prisma.contact.findMany(findManyOptions);
-
-    // Check if there are more items
-    const hasNextPage = contacts.length > take;
-    const items = hasNextPage ? contacts.slice(0, take) : contacts;
-    const nextCursor = hasNextPage ? items[items.length - 1].id : null;
-
-    return NextResponse.json({
-      items,
-      nextCursor,
-      hasNextPage,
-    });
   } catch (error) {
     console.error("Error fetching contacts:", error);
     return NextResponse.json(
