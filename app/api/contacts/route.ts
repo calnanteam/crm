@@ -70,8 +70,9 @@ export async function GET(request: NextRequest) {
     const vehicle = searchParams.get("vehicle");
     const contactType = searchParams.get("contactType");
     const search = searchParams.get("search");
-    const skip = parseInt(searchParams.get("skip") || "0");
-    const take = parseInt(searchParams.get("take") || "50");
+    const cursor = searchParams.get("cursor");
+    const sort = searchParams.get("sort") || "lastTouchAt_desc";
+    const take = Math.min(parseInt(searchParams.get("take") || "50"), 100);
 
     const where: any = {};
 
@@ -97,19 +98,55 @@ export async function GET(request: NextRequest) {
       where.OR = searchConditions;
     }
 
-    const contacts = await prisma.contact.findMany({
+    // Parse sort parameter (e.g., "lastTouchAt_desc", "displayName_asc")
+    const [sortField, sortOrder] = sort.split("_");
+    const orderBy: any[] = [];
+    
+    // Map sort field to actual field names
+    const sortFieldMap: Record<string, string> = {
+      lastTouchAt: "lastTouchAt",
+      displayName: "displayName",
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    };
+    
+    const actualSortField = sortFieldMap[sortField] || "lastTouchAt";
+    const actualSortOrder = sortOrder === "asc" ? "asc" : "desc";
+    
+    // Add primary sort field (handling nulls)
+    orderBy.push({ [actualSortField]: { sort: actualSortOrder, nulls: "last" } });
+    // Add id as tie-breaker for stable pagination
+    orderBy.push({ id: actualSortOrder });
+
+    const findManyOptions: any = {
       where,
       include: {
         owner: true,
         proposalOwner: true,
         organization: true,
       },
-      orderBy: { updatedAt: "desc" },
-      skip,
-      take: Math.min(take, 100),
-    });
+      orderBy,
+      take: take + 1, // Fetch one extra to determine if there's a next page
+    };
 
-    return NextResponse.json(contacts);
+    // If cursor is provided, use cursor-based pagination
+    if (cursor) {
+      findManyOptions.cursor = { id: cursor };
+      findManyOptions.skip = 1; // Skip the cursor item itself
+    }
+
+    const contacts = await prisma.contact.findMany(findManyOptions);
+
+    // Check if there are more items
+    const hasNextPage = contacts.length > take;
+    const items = hasNextPage ? contacts.slice(0, take) : contacts;
+    const nextCursor = hasNextPage ? items[items.length - 1].id : null;
+
+    return NextResponse.json({
+      items,
+      nextCursor,
+      hasNextPage,
+    });
   } catch (error) {
     console.error("Error fetching contacts:", error);
     return NextResponse.json(

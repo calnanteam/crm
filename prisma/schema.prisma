@@ -129,6 +129,7 @@ model User {
   tasksAssigned Task[] @relation("AssignedUser")
   activitiesLogged Activity[] @relation("ActorUser")
   proposals Proposal[] @relation("ProposalOwner")
+  contactSavedViews ContactSavedView[]
 }
 
 model Organization {
@@ -289,4 +290,19 @@ model Proposal {
   @@index([contactId])
   @@index([status])
   @@index([ownerUserId])
+}
+
+model ContactSavedView {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name        String
+  filtersJson String   // JSON string of filters: {q, stage, owner, vehicle, type, sort}
+  isDefault   Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
 }
