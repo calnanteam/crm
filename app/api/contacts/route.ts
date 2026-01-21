@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-
-// Helper function to normalize phone numbers (digits only)
-function normalizePhone(phone: string | undefined | null): string | undefined {
-  if (!phone) return undefined;
-  const normalized = phone.replace(/\D/g, '');
-  return normalized || undefined;
-}
+import { normalizePhone } from "@/lib/utils/phone";
 
 // Validation schema for contact creation
 const createContactSchema = z.object({
@@ -95,7 +89,7 @@ export async function GET(request: NextRequest) {
         { organization: { name: { contains: search, mode: "insensitive" } } },
       ];
       
-      // If search looks like it contains digits, also search phone
+      // If search contains any digits, also search normalized phone numbers
       if (searchNormalized) {
         searchConditions.push({ phoneNormalized: { contains: searchNormalized } });
       }
