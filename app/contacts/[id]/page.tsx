@@ -33,6 +33,23 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
 
+  // Constants
+  const ACTIVITY_BODY_TRUNCATE_THRESHOLD = 200;
+
+  // Activity type mappings
+  const activityTypeConfig: Record<string, { icon: string; label: string }> = {
+    NOTE: { icon: "📝", label: "Note" },
+    CALL: { icon: "📞", label: "Call" },
+    MEETING: { icon: "🤝", label: "Meeting" },
+    EMAIL_LOGGED: { icon: "📧", label: "Email" },
+    TEXT_LOGGED: { icon: "💬", label: "Text" },
+    DOCUMENT_SENT: { icon: "📤", label: "Document Sent" },
+    DOCUMENT_RECEIVED: { icon: "📥", label: "Document Received" },
+    STATUS_CHANGE: { icon: "🔄", label: "Status Change" },
+    TASK_CREATED: { icon: "✅", label: "Task Created" },
+    TASK_COMPLETED: { icon: "✔️", label: "Task Completed" },
+  };
+
   useEffect(() => {
     params.then(p => {
       setContactId(p.id);
@@ -347,38 +364,17 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 <div className="space-y-4 divide-y divide-gray-200">
                   {contact.activities.map((activity: any) => {
                     const isExpanded = expandedActivities.has(activity.id);
-                    const hasLongBody = activity.body && activity.body.length > 200;
+                    const hasLongBody = activity.body && activity.body.length > ACTIVITY_BODY_TRUNCATE_THRESHOLD;
+                    const activityConfig = activityTypeConfig[activity.type] || { icon: "📝", label: activity.type };
                     
                     return (
                       <div key={activity.id} className="flex space-x-3 py-3">
                         <div className="flex-shrink-0">
-                          <span className="text-2xl">
-                            {activity.type === "NOTE" ? "📝" :
-                             activity.type === "CALL" ? "📞" :
-                             activity.type === "MEETING" ? "🤝" :
-                             activity.type === "EMAIL_LOGGED" ? "📧" :
-                             activity.type === "TEXT_LOGGED" ? "💬" :
-                             activity.type === "DOCUMENT_SENT" ? "📤" :
-                             activity.type === "DOCUMENT_RECEIVED" ? "📥" :
-                             activity.type === "STATUS_CHANGE" ? "🔄" :
-                             activity.type === "TASK_CREATED" ? "✅" :
-                             activity.type === "TASK_COMPLETED" ? "✔️" : "📝"}
-                          </span>
+                          <span className="text-2xl">{activityConfig.icon}</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2">
-                            <p className="text-sm font-medium text-gray-900">
-                              {activity.type === "NOTE" ? "Note" :
-                               activity.type === "CALL" ? "Call" :
-                               activity.type === "MEETING" ? "Meeting" :
-                               activity.type === "EMAIL_LOGGED" ? "Email" :
-                               activity.type === "TEXT_LOGGED" ? "Text" :
-                               activity.type === "DOCUMENT_SENT" ? "Document Sent" :
-                               activity.type === "DOCUMENT_RECEIVED" ? "Document Received" :
-                               activity.type === "STATUS_CHANGE" ? "Status Change" :
-                               activity.type === "TASK_CREATED" ? "Task Created" :
-                               activity.type === "TASK_COMPLETED" ? "Task Completed" : activity.type}
-                            </p>
+                            <p className="text-sm font-medium text-gray-900">{activityConfig.label}</p>
                             <span className="text-xs text-gray-500">
                               {new Date(activity.occurredAt).toLocaleDateString()} at{" "}
                               {new Date(activity.occurredAt).toLocaleTimeString()}
@@ -394,7 +390,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                                 style={!isExpanded && hasLongBody ? {
                                   display: '-webkit-box',
                                   WebkitLineClamp: 3,
-                                  WebkitBoxOrient: 'vertical',
+                                  WebkitBoxOrient: 'vertical' as any,
                                   overflow: 'hidden',
                                   maxHeight: '4.5em', // Fallback: ~3 lines at 1.5em line-height
                                 } as React.CSSProperties : undefined}
