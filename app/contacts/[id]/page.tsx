@@ -32,6 +32,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [taskFilter, setTaskFilter] = useState<"all" | "open" | "completed">("all");
   const [isHeaderSticky, setIsHeaderSticky] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+  const [noteError, setNoteError] = useState<string>("");
+  const [taskError, setTaskError] = useState<string>("");
 
   // Constants
   const ACTIVITY_BODY_TRUNCATE_THRESHOLD = 200;
@@ -93,42 +97,86 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const addNote = async () => {
-    if (!contactId) return;
-    await fetch("/api/activities", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "NOTE",
-        subject: noteSubject,
-        body: noteBody,
-        contactId,
-      }),
-    });
-    setShowNoteModal(false);
-    setNoteSubject("");
-    setNoteBody("");
-    fetchContact(contactId);
+    if (!contactId || !noteBody) return;
+    
+    setIsSavingNote(true);
+    setNoteError("");
+    
+    try {
+      const response = await fetch("/api/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "NOTE",
+          subject: noteSubject,
+          body: noteBody,
+          contactId,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to create note");
+      }
+      
+      const newActivity = await response.json();
+      
+      // Optimistic update: immediately add to timeline
+      setContact((prev: any) => ({
+        ...prev,
+        activities: [newActivity, ...(prev.activities || [])],
+      }));
+      
+      setShowNoteModal(false);
+      setNoteSubject("");
+      setNoteBody("");
+    } catch (error) {
+      setNoteError("Failed to create note. Please try again.");
+    } finally {
+      setIsSavingNote(false);
+    }
   };
 
   const addTask = async () => {
-    if (!contactId) return;
-    await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: taskTitle,
-        description: taskDescription,
-        dueAt: taskDueAt || null,
-        priority: taskPriority,
-        contactId,
-      }),
-    });
-    setShowTaskModal(false);
-    setTaskTitle("");
-    setTaskDescription("");
-    setTaskDueAt("");
-    setTaskPriority("MEDIUM");
-    fetchContact(contactId);
+    if (!contactId || !taskTitle) return;
+    
+    setIsSavingTask(true);
+    setTaskError("");
+    
+    try {
+      const response = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: taskTitle,
+          description: taskDescription,
+          dueAt: taskDueAt || null,
+          priority: taskPriority,
+          contactId,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error("Failed to create task");
+      }
+      
+      const newTask = await response.json();
+      
+      // Optimistic update: immediately add to tasks list
+      setContact((prev: any) => ({
+        ...prev,
+        tasks: [...(prev.tasks || []), newTask],
+      }));
+      
+      setShowTaskModal(false);
+      setTaskTitle("");
+      setTaskDescription("");
+      setTaskDueAt("");
+      setTaskPriority("MEDIUM");
+    } catch (error) {
+      setTaskError("Failed to create task. Please try again.");
+    } finally {
+      setIsSavingTask(false);
+    }
   };
 
   const changeStage = async () => {
@@ -191,7 +239,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const contactName = contact.displayName || `${contact.firstName || ""} ${contact.lastName || ""}`.trim() || "Unknown Contact";
   
   const allOpenTasks = contact.tasks?.filter((t: any) => t.status === "OPEN" || t.status === "IN_PROGRESS") || [];
-  const allCompletedTasks = contact.tasks?.filter((t: any) => t.status === "DONE") || [];
+  const allCompletedTasks = contact.tasks?.filter((t: any) => t.status === "DONE" || t.status === "CANCELLED") || [];
 
   // Sort open tasks by due date (nulls last)
   const sortedOpenTasks = [...allOpenTasks].sort((a: any, b: any) => {
@@ -201,13 +249,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime();
   });
 
+  // Sort completed tasks by completedAt desc (fallback to updatedAt)
+  const sortedCompletedTasks = [...allCompletedTasks].sort((a: any, b: any) => {
+    const aDate = a.completedAt ? new Date(a.completedAt).getTime() : new Date(a.updatedAt).getTime();
+    const bDate = b.completedAt ? new Date(b.completedAt).getTime() : new Date(b.updatedAt).getTime();
+    return bDate - aDate; // desc order
+  });
+
   // Filter tasks based on selected filter
   const displayedTasks = 
     taskFilter === "open" ? sortedOpenTasks :
-    taskFilter === "completed" ? allCompletedTasks :
-    [...sortedOpenTasks, ...allCompletedTasks];
+    taskFilter === "completed" ? sortedCompletedTasks :
+    [...sortedOpenTasks, ...sortedCompletedTasks];
 
-  const totalTaskCount = sortedOpenTasks.length + allCompletedTasks.length;
+  const totalTaskCount = sortedOpenTasks.length + sortedCompletedTasks.length;
 
   const proposalStages = ["PROPOSAL_TO_BE_DEVELOPED", "PROPOSAL_IN_PROGRESS", "PROPOSAL_READY_FOR_FORMATTING", "PROPOSAL_SENT"];
   const isInProposal = proposalStages.includes(contact.stage);
@@ -249,7 +304,12 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               <div className="flex items-center space-x-4 min-w-0 flex-1">
                 <h2 className="text-xl font-bold text-gray-900 truncate">{contactName}</h2>
                 <ContactStageBadge stage={contact.stage} />
-                <span className="text-sm text-gray-500 hidden md:inline">Vehicle: {contact.vehicle}</span>
+                {contact.email && (
+                  <span className="text-sm text-gray-500 hidden lg:inline truncate">{contact.email}</span>
+                )}
+                {contact.phone && (
+                  <span className="text-sm text-gray-500 hidden md:inline">{contact.phone}</span>
+                )}
               </div>
               <div className="flex space-x-2 flex-shrink-0">
                 <Link href={`/contacts/${contactId}/edit`}>
@@ -481,7 +541,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                         : "border-transparent text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    Completed ({allCompletedTasks.length})
+                    Completed ({sortedCompletedTasks.length})
                   </button>
                 </div>
 
@@ -525,13 +585,26 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      <Modal isOpen={showNoteModal} onClose={() => setShowNoteModal(false)} title="Add Note">
+      <Modal 
+        isOpen={showNoteModal} 
+        onClose={() => {
+          setShowNoteModal(false);
+          setNoteError("");
+        }} 
+        title="Add Note"
+      >
         <div className="space-y-4">
           <Input
             label="Subject"
             value={noteSubject}
             onChange={(e) => setNoteSubject(e.target.value)}
             placeholder="Optional subject..."
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setShowNoteModal(false);
+                setNoteError("");
+              }
+            }}
           />
           <TextArea
             label="Note"
@@ -540,19 +613,45 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             rows={6}
             placeholder="Enter your note..."
             required
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setShowNoteModal(false);
+                setNoteError("");
+              }
+            }}
           />
+          {noteError && (
+            <p className="text-sm text-red-600">{noteError}</p>
+          )}
           <div className="flex justify-end space-x-2">
-            <Button variant="secondary" onClick={() => setShowNoteModal(false)}>
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                setShowNoteModal(false);
+                setNoteError("");
+              }}
+              disabled={isSavingNote}
+            >
               Cancel
             </Button>
-            <Button onClick={addNote} disabled={!noteBody}>
-              Add Note
+            <Button 
+              onClick={addNote} 
+              disabled={!noteBody || isSavingNote}
+            >
+              {isSavingNote ? "Saving..." : "Add Note"}
             </Button>
           </div>
         </div>
       </Modal>
 
-      <Modal isOpen={showTaskModal} onClose={() => setShowTaskModal(false)} title="Add Task">
+      <Modal 
+        isOpen={showTaskModal} 
+        onClose={() => {
+          setShowTaskModal(false);
+          setTaskError("");
+        }} 
+        title="Add Task"
+      >
         <div className="space-y-4">
           <Input
             label="Task Title"
@@ -560,6 +659,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             onChange={(e) => setTaskTitle(e.target.value)}
             placeholder="Enter task title..."
             required
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setShowTaskModal(false);
+                setTaskError("");
+              } else if (e.key === "Enter" && taskTitle) {
+                addTask();
+              }
+            }}
           />
           <TextArea
             label="Description"
@@ -567,12 +674,26 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             onChange={(e) => setTaskDescription(e.target.value)}
             rows={4}
             placeholder="Optional description..."
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setShowTaskModal(false);
+                setTaskError("");
+              }
+            }}
           />
           <Input
             label="Due Date"
             type="date"
             value={taskDueAt}
             onChange={(e) => setTaskDueAt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setShowTaskModal(false);
+                setTaskError("");
+              } else if (e.key === "Enter" && taskTitle) {
+                addTask();
+              }
+            }}
           />
           <Select
             label="Priority"
@@ -580,12 +701,25 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             value={taskPriority}
             onChange={(e) => setTaskPriority(e.target.value)}
           />
+          {taskError && (
+            <p className="text-sm text-red-600">{taskError}</p>
+          )}
           <div className="flex justify-end space-x-2">
-            <Button variant="secondary" onClick={() => setShowTaskModal(false)}>
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                setShowTaskModal(false);
+                setTaskError("");
+              }}
+              disabled={isSavingTask}
+            >
               Cancel
             </Button>
-            <Button onClick={addTask} disabled={!taskTitle}>
-              Add Task
+            <Button 
+              onClick={addTask} 
+              disabled={!taskTitle || isSavingTask}
+            >
+              {isSavingTask ? "Saving..." : "Add Task"}
             </Button>
           </div>
         </div>
