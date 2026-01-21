@@ -67,11 +67,13 @@ export function AddTaskModal({
       setDueAt("");
       setDescription("");
       
-      // Notify parent and close modal after a brief delay
+      // Notify parent immediately
+      if (onTaskCreated) {
+        onTaskCreated();
+      }
+      
+      // Close modal after a brief delay
       setTimeout(() => {
-        if (onTaskCreated) {
-          onTaskCreated();
-        }
         onClose();
         setSuccessMessage(null);
       }, SUCCESS_DISPLAY_DURATION);

@@ -15,8 +15,14 @@ export async function PATCH(
       updateData.dueAt = new Date(body.dueAt);
     }
     
+    // Set completedAt when status changes to DONE
     if (body.status === "DONE" && !body.completedAt) {
       updateData.completedAt = new Date();
+    }
+    
+    // Clear completedAt when status changes away from DONE
+    if (body.status && body.status !== "DONE") {
+      updateData.completedAt = null;
     }
 
     const task = await prisma.task.update({
