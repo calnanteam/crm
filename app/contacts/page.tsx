@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Navigation } from "../components/Navigation";
 import { Card } from "../components/Card";
 import { ContactStageBadge } from "../components/ContactStageBadge";
@@ -10,10 +10,7 @@ import { Button } from "../components/Button";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-// Force dynamic rendering to prevent build-time prerendering
-export const dynamic = 'force-dynamic';
-
-function ContactsPageContent() {
+export default function ContactsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<any[]>([]);
@@ -394,13 +391,5 @@ function ContactsPageContent() {
         </Card>
       </div>
     </>
-  );
-}
-
-export default function ContactsPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <ContactsPageContent />
-    </Suspense>
   );
 }
