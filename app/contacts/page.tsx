@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+export const dynamic = "force-dynamic";
+
+import { useState, useEffect, useRef, Suspense } from "react";
 import { Navigation } from "../components/Navigation";
 import { Card } from "../components/Card";
 import { ContactStageBadge } from "../components/ContactStageBadge";
@@ -10,7 +12,7 @@ import { Button } from "../components/Button";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function ContactsPage() {
+function ContactsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<any[]>([]);
@@ -391,5 +393,13 @@ export default function ContactsPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+export default function ContactsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContactsPageContent />
+    </Suspense>
   );
 }
