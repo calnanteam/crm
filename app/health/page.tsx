@@ -1,23 +1,33 @@
+import { prisma } from "@/lib/prisma";
+
 export default async function HealthPage() {
-  // Fetch health check data from the API endpoint
-  let healthData;
+  // Perform health check directly (no HTTP round-trip needed)
+  const timestamp = new Date().toISOString();
+  const env = process.env.NODE_ENV || "development";
+  
+  let dbOk = false;
+  let dbDetails: string | undefined;
+
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/health`, {
-      cache: 'no-store',
-    });
-    healthData = await response.json();
+    // Lightweight DB connectivity check using contact.count()
+    await prisma.contact.count();
+    dbOk = true;
   } catch (error) {
-    healthData = {
-      ok: false,
-      timestamp: new Date().toISOString(),
-      env: process.env.NODE_ENV || 'development',
-      db: {
-        ok: false,
-        details: 'Failed to fetch health data',
-      },
-    };
+    // Don't expose sensitive error details
+    dbDetails = error instanceof Error ? "Database connection failed" : "Unknown database error";
   }
+
+  const ok = dbOk;
+  
+  const healthData = {
+    ok,
+    timestamp,
+    env,
+    db: {
+      ok: dbOk,
+      details: dbDetails,
+    },
+  };
 
   return (
     <div style={{ 
