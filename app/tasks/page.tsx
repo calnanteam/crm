@@ -64,9 +64,10 @@ export default function TasksPage() {
       const response = await fetch("/api/tasks");
       if (!response.ok) throw new Error("Failed to fetch tasks");
       const data = await response.json();
-      setTasks(data);
+      setTasks(Array.isArray(data) ? data : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch tasks");
+      setTasks([]);
     } finally {
       setLoading(false);
     }

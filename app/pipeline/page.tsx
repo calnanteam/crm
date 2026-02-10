@@ -237,9 +237,14 @@ export default function PipelinePage() {
   }, [selectedContactId, contacts, searchQuery, addTaskModalOpen, router]);
 
   const fetchUsers = async () => {
-    const response = await fetch("/api/users");
-    const data = await response.json();
-    setUsers(data);
+    try {
+      const response = await fetch("/api/users");
+      const data = await response.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      setUsers([]);
+    }
   };
 
   const fetchTaskSignalsForContact = async (contactId: string): Promise<TaskSignals> => {
@@ -290,32 +295,38 @@ export default function PipelinePage() {
 
   const fetchContacts = async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (ownerFilter) params.append("ownerUserId", ownerFilter);
-    if (vehicleFilter) params.append("vehicle", vehicleFilter);
-    if (typeFilter) params.append("contactType", typeFilter);
+    try {
+      const params = new URLSearchParams();
+      if (ownerFilter) params.append("ownerUserId", ownerFilter);
+      if (vehicleFilter) params.append("vehicle", vehicleFilter);
+      if (typeFilter) params.append("contactType", typeFilter);
 
-    const response = await fetch(`/api/contacts?${params}`);
-    const data = await response.json();
-    
-    // Fetch last activity for each contact using existing endpoint
-    const contactsWithActivities = await Promise.all(
-      data.map(async (contact: Contact) => {
-        try {
-          const activityResponse = await fetch(`/api/activities?contactId=${contact.id}`);
-          const activities = await activityResponse.json();
-          return {
-            ...contact,
-            lastActivity: activities.length > 0 ? activities[0] : null,
-          };
-        } catch (err) {
-          console.error(`Failed to fetch activities for contact ${contact.id}:`, err);
-          return { ...contact, lastActivity: null };
-        }
-      })
-    );
-    
-    setContacts(contactsWithActivities);
+      const response = await fetch(`/api/contacts?${params}`);
+      const data = await response.json();
+      const contacts = Array.isArray(data) ? data : (data.items || []);
+      
+      // Fetch last activity for each contact using existing endpoint
+      const contactsWithActivities = await Promise.all(
+        contacts.map(async (contact: Contact) => {
+          try {
+            const activityResponse = await fetch(`/api/activities?contactId=${contact.id}`);
+            const activities = await activityResponse.json();
+            return {
+              ...contact,
+              lastActivity: activities.length > 0 ? activities[0] : null,
+            };
+          } catch (err) {
+            console.error(`Failed to fetch activities for contact ${contact.id}:`, err);
+            return { ...contact, lastActivity: null };
+          }
+        })
+      );
+      
+      setContacts(contactsWithActivities);
+    } catch (error) {
+      console.error("Error fetching contacts:", error);
+      setContacts([]);
+    }
     setLoading(false);
   };
 

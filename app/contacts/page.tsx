@@ -82,9 +82,14 @@ function ContactsPageContent() {
   }, [stageFilter, ownerFilter, vehicleFilter, typeFilter, sortFilter]);
 
   const fetchUsers = async () => {
-    const response = await fetch("/api/users");
-    const data = await response.json();
-    setUsers(data);
+    try {
+      const response = await fetch("/api/users");
+      const data = await response.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      setUsers([]);
+    }
   };
 
   const updateURLAndFetch = () => {
@@ -129,14 +134,15 @@ function ContactsPageContent() {
       
       if (cursor) {
         // Append to existing contacts
-        setContacts((prev) => [...prev, ...data.items]);
+        setContacts((prev) => [...prev, ...(data.items || [])]);
       } else {
         // Replace contacts
-        setContacts(data.items);
+        setContacts(data.items || []);
       }
       setNextCursor(data.nextCursor);
     } catch (error) {
       console.error("Error fetching contacts:", error);
+      setContacts([]);
     } finally {
       setLoading(false);
       setLoadingMore(false);
