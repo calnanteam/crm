@@ -93,6 +93,7 @@ export default function PipelinePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [updatingContactId, setUpdatingContactId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [addTaskModalOpen, setAddTaskModalOpen] = useState(false);
   const [selectedContactForTask, setSelectedContactForTask] = useState<Contact | null>(null);
   const [taskSignals, setTaskSignals] = useState<Record<string, TaskSignals>>({});
@@ -239,10 +240,14 @@ export default function PipelinePage() {
   const fetchUsers = async () => {
     try {
       const response = await fetch("/api/users");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
       const data = await response.json();
       setUsers(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Error fetching users:", error);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      setFetchError(err instanceof Error ? err.message : "Failed to load users");
       setUsers([]);
     }
   };
@@ -302,6 +307,9 @@ export default function PipelinePage() {
       if (typeFilter) params.append("contactType", typeFilter);
 
       const response = await fetch(`/api/contacts?${params}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch contacts: ${response.status}`);
+      }
       const data = await response.json();
       const contacts = Array.isArray(data) ? data : (data.items || []);
       
@@ -323,8 +331,10 @@ export default function PipelinePage() {
       );
       
       setContacts(contactsWithActivities);
-    } catch (error) {
-      console.error("Error fetching contacts:", error);
+      setFetchError(null); // Clear any previous errors
+    } catch (err) {
+      console.error("Error fetching contacts:", err);
+      setFetchError(err instanceof Error ? err.message : "Failed to load contacts");
       setContacts([]);
     }
     setLoading(false);
@@ -538,9 +548,20 @@ export default function PipelinePage() {
       <PageHeader title="Pipeline View" />
 
       {/* Error message */}
-      {error && (
+      {(error || fetchError) && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-800">{error}</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-red-800">{error || fetchError}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                setFetchError(null);
+              }}
+              className="text-red-600 hover:text-red-800 font-medium"
+            >
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

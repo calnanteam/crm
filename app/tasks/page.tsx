@@ -62,11 +62,14 @@ export default function TasksPage() {
     setError(null);
     try {
       const response = await fetch("/api/tasks");
-      if (!response.ok) throw new Error("Failed to fetch tasks");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch tasks: ${response.status}`);
+      }
       const data = await response.json();
       setTasks(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch tasks");
+      const errorMessage = err instanceof Error ? err.message : "Failed to fetch tasks";
+      setError(errorMessage);
       setTasks([]);
     } finally {
       setLoading(false);
@@ -346,7 +349,6 @@ export default function TasksPage() {
           </div>
         ) : filteredAndSortedTasks.length === 0 ? (
           <EmptyState 
-            icon="✓"
             title="No tasks found"
             description={statusTab === "OPEN" ? "All caught up! No open tasks." : "Try adjusting your filters"}
           />

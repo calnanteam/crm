@@ -7,10 +7,10 @@ interface EmptyStateProps {
   action?: ReactNode;
 }
 
-export function EmptyState({ icon = "📭", title, description, action }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action }: EmptyStateProps) {
   return (
     <div className="text-center py-12">
-      <div className="text-5xl mb-4">{icon}</div>
+      {icon && <div className="text-5xl mb-4">{icon}</div>}
       <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
       {description && (
         <p className="text-sm text-gray-500 mb-4">{description}</p>

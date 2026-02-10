@@ -31,6 +31,7 @@ function ContactsPageContent() {
   const [typeFilter, setTypeFilter] = useState("");
   const [sortFilter, setSortFilter] = useState("lastTouchAt_desc");
   const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initializedRef = useRef(false);
 
@@ -84,10 +85,14 @@ function ContactsPageContent() {
   const fetchUsers = async () => {
     try {
       const response = await fetch("/api/users");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
       const data = await response.json();
       setUsers(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("Error fetching users:", error);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      setError(err instanceof Error ? err.message : "Failed to load users");
       setUsers([]);
     }
   };
@@ -130,6 +135,9 @@ function ContactsPageContent() {
 
     try {
       const response = await fetch(`/api/contacts?${params}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch contacts: ${response.status}`);
+      }
       const data = await response.json();
       
       if (cursor) {
@@ -140,8 +148,10 @@ function ContactsPageContent() {
         setContacts(data.items || []);
       }
       setNextCursor(data.nextCursor);
-    } catch (error) {
-      console.error("Error fetching contacts:", error);
+      setError(null); // Clear any previous errors
+    } catch (err) {
+      console.error("Error fetching contacts:", err);
+      setError(err instanceof Error ? err.message : "Failed to load contacts");
       setContacts([]);
     } finally {
       setLoading(false);
@@ -231,6 +241,21 @@ function ContactsPageContent() {
         }
       />
 
+      {/* Error Banner */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-red-800">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 hover:text-red-800 font-medium"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+
       <FilterBar>
         <div className="space-y-4">
           {/* Search Input */}
@@ -293,7 +318,6 @@ function ContactsPageContent() {
           </div>
         ) : contacts.length === 0 ? (
           <EmptyState 
-            icon="👥"
             title="No contacts found"
             description="Try adjusting your filters or create a new contact"
             action={
