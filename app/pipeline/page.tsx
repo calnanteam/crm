@@ -601,8 +601,8 @@ export default function PipelinePage() {
                 >
                   <div className={`rounded-lg border-2 ${group.color} p-4 h-full`}>
                     <div className="mb-4">
-                      <h3 className="text-base font-semibold text-gray-900">{group.title}</h3>
-                      <p className="text-xs text-gray-600 mt-1">
+                      <h3 className="text-lg font-semibold text-gray-900">{group.title}</h3>
+                      <p className="text-sm text-gray-600 mt-1">
                         {groupContacts.length} contact{groupContacts.length !== 1 ? "s" : ""}
                       </p>
                     </div>
@@ -624,7 +624,7 @@ export default function PipelinePage() {
                             key={contact.id}
                             className={`bg-white rounded-lg shadow-sm border ${
                               isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
-                            } p-3 transition-all duration-200 hover:shadow-md hover:border-blue-300 group relative cursor-pointer`}
+                            } p-3 transition-all duration-200 hover:shadow-lg hover:border-blue-300 group relative cursor-pointer`}
                             onClick={() => setSelectedContactId(contact.id)}
                           >
                             {/* Open affordance - appears on hover */}

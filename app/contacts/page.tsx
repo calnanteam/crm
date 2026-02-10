@@ -337,7 +337,7 @@ function ContactsPageContent() {
                     key={contact.id}
                     className={`cursor-pointer transition-all duration-150 ${
                       hoveredRowId === contact.id
-                        ? "bg-blue-50 shadow-sm"
+                        ? "bg-blue-50 shadow-md"
                         : "hover:bg-gray-50"
                     }`}
                     onMouseEnter={() => setHoveredRowId(contact.id)}
@@ -388,7 +388,7 @@ function ContactsPageContent() {
                             e.stopPropagation();
                             router.push(`/contacts/${contact.id}`);
                           }}
-                          className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs font-medium"
+                          className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-xs font-medium shadow-sm"
                         >
                           Open
                         </button>
