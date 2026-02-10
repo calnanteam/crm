@@ -1,11 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Navigation } from "../components/Navigation";
-import { Card } from "../components/Card";
+import { AppShell } from "../components/AppShell";
+import { PageHeader } from "../components/PageHeader";
 import { ContactStageBadge } from "../components/ContactStageBadge";
 import { Select } from "../components/Select";
 import { AddTaskModal } from "../components/AddTaskModal";
+import { SearchInput } from "../components/ui/SearchInput";
+import { FilterBar } from "../components/ui/FilterBar";
+import { EmptyState } from "../components/ui/EmptyState";
 import { useRouter } from "next/navigation";
 
 // Types matching the Prisma schema
@@ -90,6 +93,7 @@ export default function PipelinePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [updatingContactId, setUpdatingContactId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [addTaskModalOpen, setAddTaskModalOpen] = useState(false);
   const [selectedContactForTask, setSelectedContactForTask] = useState<Contact | null>(null);
   const [taskSignals, setTaskSignals] = useState<Record<string, TaskSignals>>({});
@@ -234,9 +238,18 @@ export default function PipelinePage() {
   }, [selectedContactId, contacts, searchQuery, addTaskModalOpen, router]);
 
   const fetchUsers = async () => {
-    const response = await fetch("/api/users");
-    const data = await response.json();
-    setUsers(data);
+    try {
+      const response = await fetch("/api/users");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
+      const data = await response.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching users:", err);
+      setFetchError(err instanceof Error ? err.message : "Failed to load users");
+      setUsers([]);
+    }
   };
 
   const fetchTaskSignalsForContact = async (contactId: string): Promise<TaskSignals> => {
@@ -287,32 +300,43 @@ export default function PipelinePage() {
 
   const fetchContacts = async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (ownerFilter) params.append("ownerUserId", ownerFilter);
-    if (vehicleFilter) params.append("vehicle", vehicleFilter);
-    if (typeFilter) params.append("contactType", typeFilter);
+    try {
+      const params = new URLSearchParams();
+      if (ownerFilter) params.append("ownerUserId", ownerFilter);
+      if (vehicleFilter) params.append("vehicle", vehicleFilter);
+      if (typeFilter) params.append("contactType", typeFilter);
 
-    const response = await fetch(`/api/contacts?${params}`);
-    const data = await response.json();
-    
-    // Fetch last activity for each contact using existing endpoint
-    const contactsWithActivities = await Promise.all(
-      data.map(async (contact: Contact) => {
-        try {
-          const activityResponse = await fetch(`/api/activities?contactId=${contact.id}`);
-          const activities = await activityResponse.json();
-          return {
-            ...contact,
-            lastActivity: activities.length > 0 ? activities[0] : null,
-          };
-        } catch (err) {
-          console.error(`Failed to fetch activities for contact ${contact.id}:`, err);
-          return { ...contact, lastActivity: null };
-        }
-      })
-    );
-    
-    setContacts(contactsWithActivities);
+      const response = await fetch(`/api/contacts?${params}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch contacts: ${response.status}`);
+      }
+      const data = await response.json();
+      const contacts = Array.isArray(data) ? data : (data.items || []);
+      
+      // Fetch last activity for each contact using existing endpoint
+      const contactsWithActivities = await Promise.all(
+        contacts.map(async (contact: Contact) => {
+          try {
+            const activityResponse = await fetch(`/api/activities?contactId=${contact.id}`);
+            const activities = await activityResponse.json();
+            return {
+              ...contact,
+              lastActivity: activities.length > 0 ? activities[0] : null,
+            };
+          } catch (err) {
+            console.error(`Failed to fetch activities for contact ${contact.id}:`, err);
+            return { ...contact, lastActivity: null };
+          }
+        })
+      );
+      
+      setContacts(contactsWithActivities);
+      setFetchError(null); // Clear any previous errors
+    } catch (err) {
+      console.error("Error fetching contacts:", err);
+      setFetchError(err instanceof Error ? err.message : "Failed to load contacts");
+      setContacts([]);
+    }
     setLoading(false);
   };
 
@@ -520,246 +544,254 @@ export default function PipelinePage() {
   ];
 
   return (
-    <>
-      <Navigation />
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Pipeline View</h1>
-        </div>
+    <AppShell>
+      <PageHeader title="Pipeline View" />
 
-        {/* Error message */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-sm text-red-800">{error}</p>
+      {/* Error message */}
+      {(error || fetchError) && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-red-800">{error || fetchError}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                setFetchError(null);
+              }}
+              className="text-red-600 hover:text-red-800 font-medium"
+            >
+              ✕
+            </button>
           </div>
-        )}
-
-        {/* Filters - Sticky */}
-        <div className="sticky top-0 z-10 bg-white pb-4 mb-2">
-          <Card className="shadow-md">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <input
-                type="text"
-                placeholder="Search by name or email..."
-                className="px-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Select
-                options={userOptions}
-                value={ownerFilter}
-                onChange={(e) => setOwnerFilter(e.target.value)}
-              />
-              <Select
-                options={vehicleOptions}
-                value={vehicleFilter}
-                onChange={(e) => setVehicleFilter(e.target.value)}
-              />
-              <Select
-                options={typeOptions}
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-              />
-              <button
-                onClick={handleClearFilters}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </Card>
         </div>
+      )}
 
-        {loading ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500">Loading pipeline...</p>
+      {/* Filters - Sticky */}
+      <div className="sticky top-0 z-10 bg-gray-50 pb-4 mb-2">
+        <FilterBar className="shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <SearchInput
+              placeholder="Search by name or email..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onClear={() => setSearchQuery("")}
+            />
+            <Select
+              options={userOptions}
+              value={ownerFilter}
+              onChange={(e) => setOwnerFilter(e.target.value)}
+            />
+            <Select
+              options={vehicleOptions}
+              value={vehicleFilter}
+              onChange={(e) => setVehicleFilter(e.target.value)}
+            />
+            <Select
+              options={typeOptions}
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+            />
+            <button
+              onClick={handleClearFilters}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              Clear Filters
+            </button>
           </div>
-        ) : (
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {(() => {
-              // Compute visible contacts once for performance
-              const visibleContacts = getVisibleContacts();
-              const first60ContactIds = new Set(visibleContacts.slice(0, 60).map(c => c.id));
-              
-              return stageGroups.map((group) => {
-                const groupContacts = getContactsByStageGroup(group.stages);
-                return (
-                  <div
-                    key={group.title}
-                    className="flex-shrink-0 w-80"
-                    style={{ minWidth: "20rem" }}
-                  >
-                    <div className={`rounded-lg border-2 ${group.color} p-4 h-full`}>
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900">{group.title}</h3>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {groupContacts.length} contact{groupContacts.length !== 1 ? "s" : ""}
-                        </p>
-                      </div>
+        </FilterBar>
+      </div>
 
-                      <div className="space-y-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
-                        {groupContacts.length === 0 ? (
-                          <p className="text-sm text-gray-400 text-center py-8">No contacts</p>
-                        ) : (
-                          groupContacts.map((contact) => {
-                            const isSelected = contact.id === selectedContactId;
-                            const isInFirst60 = first60ContactIds.has(contact.id);
-                            const signals = taskSignals[contact.id];
-                            const showSignals = isInFirst60 && signals;
-                          
-                          return (
-                            <div
-                              key={contact.id}
-                              className={`bg-white rounded-lg shadow-sm border ${
-                                isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
-                              } p-3 transition-all duration-200 hover:shadow-lg hover:border-blue-300 group relative cursor-pointer`}
-                              onClick={() => setSelectedContactId(contact.id)}
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-gray-500 mt-3">Loading pipeline...</p>
+        </div>
+      ) : (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {(() => {
+            // Compute visible contacts once for performance
+            const visibleContacts = getVisibleContacts();
+            const first60ContactIds = new Set(visibleContacts.slice(0, 60).map(c => c.id));
+            
+            return stageGroups.map((group) => {
+              const groupContacts = getContactsByStageGroup(group.stages);
+              return (
+                <div
+                  key={group.title}
+                  className="flex-shrink-0 w-80"
+                  style={{ minWidth: "20rem" }}
+                >
+                  <div className={`rounded-lg border-2 ${group.color} p-4 h-full`}>
+                    <div className="mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">{group.title}</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {groupContacts.length} contact{groupContacts.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 overflow-y-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                      {groupContacts.length === 0 ? (
+                        <div className="text-center py-8">
+                          <p className="text-sm text-gray-400">No contacts</p>
+                        </div>
+                      ) : (
+                        groupContacts.map((contact) => {
+                          const isSelected = contact.id === selectedContactId;
+                          const isInFirst60 = first60ContactIds.has(contact.id);
+                          const signals = taskSignals[contact.id];
+                          const showSignals = isInFirst60 && signals;
+                        
+                        return (
+                          <div
+                            key={contact.id}
+                            className={`bg-white rounded-lg shadow-sm border ${
+                              isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200'
+                            } p-3 transition-all duration-200 hover:shadow-lg hover:border-blue-300 group relative cursor-pointer`}
+                            onClick={() => setSelectedContactId(contact.id)}
+                          >
+                            {/* Open affordance - appears on hover */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/contacts/${contact.id}`);
+                              }}
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200"
+                              title="Open contact details"
                             >
-                              {/* Open affordance - appears on hover */}
+                              Open
+                            </button>
+
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1 pr-12">
+                                <p className="font-medium text-sm text-gray-900 truncate">
+                                  {contact.displayName ||
+                                    `${contact.firstName || ""} ${contact.lastName || ""}`.trim() ||
+                                    "Unknown"}
+                                </p>
+                                {contact.email && (
+                                  <p className="text-xs text-gray-500 truncate mt-1">{contact.email}</p>
+                                )}
+                              </div>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  router.push(`/contacts/${contact.id}`);
+                                  handleAddTask(contact);
                                 }}
-                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 px-2 py-1 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200"
-                                title="Open contact details"
+                                className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
+                                title="Add Task"
                               >
-                                Open
+                                + Task
                               </button>
+                            </div>
 
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1 pr-12">
-                                  <p className="font-medium text-sm text-gray-900 truncate">
-                                    {contact.displayName ||
-                                      `${contact.firstName || ""} ${contact.lastName || ""}`.trim() ||
-                                      "Unknown"}
-                                  </p>
-                                  {contact.email && (
-                                    <p className="text-xs text-gray-500 truncate mt-1">{contact.email}</p>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAddTask(contact);
-                                  }}
-                                  className="ml-2 px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors"
-                                  title="Add Task"
-                                >
-                                  + Task
-                                </button>
+                            <div className="mb-2">
+                              <select
+                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                value={contact.stage}
+                                disabled={updatingContactId === contact.id}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleStageChange(
+                                    contact.id,
+                                    e.target.value as RelationshipStage,
+                                    contact.stage
+                                  );
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {allStageOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <select
+                                className="w-full px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                value={contact.ownerUserId || ""}
+                                disabled={updatingContactId === contact.id}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleOwnerChange(
+                                    contact.id,
+                                    e.target.value,
+                                    contact.ownerUserId,
+                                    contact.owner
+                                  );
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <option value="">Unassigned</option>
+                                {users.map((user) => (
+                                  <option key={user.id} value={user.id}>
+                                    {user.displayName || user.email}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {contact.vehicle && (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                  {contact.vehicle}
+                                </span>
                               </div>
+                            )}
 
-                              <div className="mb-2">
-                                <select
-                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  value={contact.stage}
-                                  disabled={updatingContactId === contact.id}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    handleStageChange(
-                                      contact.id,
-                                      e.target.value as RelationshipStage,
-                                      contact.stage
-                                    );
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {allStageOptions.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              <div className="mt-2 pt-2 border-t border-gray-100">
-                                <select
-                                  className="w-full px-2 py-1 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  value={contact.ownerUserId || ""}
-                                  disabled={updatingContactId === contact.id}
-                                  onChange={(e) => {
-                                    e.stopPropagation();
-                                    handleOwnerChange(
-                                      contact.id,
-                                      e.target.value,
-                                      contact.ownerUserId,
-                                      contact.owner
-                                    );
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <option value="">Unassigned</option>
-                                  {users.map((user) => (
-                                    <option key={user.id} value={user.id}>
-                                      {user.displayName || user.email}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-
-                              {contact.vehicle && (
-                                <div className="mt-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                    {contact.vehicle}
-                                  </span>
-                                </div>
-                              )}
-
-                              {/* Task Signals */}
-                              <div className="mt-2 pt-2 border-t border-gray-100">
-                                <div className="text-xs text-gray-600">
-                                  <span className="font-medium">Signals:</span>{" "}
-                                  {showSignals ? (
-                                    <>
-                                      <span className="text-gray-900">
-                                        Open: {signals.openCount}
-                                      </span>
-                                      {" / "}
-                                      <span className={signals.dueTodayCount ? "text-orange-600 font-medium" : "text-gray-900"}>
-                                        Due today: {signals.dueTodayCount}
-                                      </span>
-                                      {" / "}
-                                      <span className={signals.overdueCount ? "text-red-600 font-medium" : "text-gray-900"}>
-                                        Overdue: {signals.overdueCount}
-                                      </span>
-                                    </>
-                                  ) : (
-                                    <span className="text-gray-400">—</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Last Activity - Polished with truncation */}
-                              <div className="mt-2 pt-2 border-t border-gray-100">
-                                {contact.lastActivity ? (
-                                  <div className="text-xs text-gray-500">
-                                    <span className="font-medium text-gray-700 truncate block max-w-[80%]">
-                                      {getActivityLabel(contact.lastActivity.type)}
+                            {/* Task Signals */}
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              <div className="text-xs text-gray-600">
+                                <span className="font-medium">Signals:</span>{" "}
+                                {showSignals ? (
+                                  <>
+                                    <span className="text-gray-900">
+                                      Open: {signals.openCount}
                                     </span>
-                                    <span className="text-gray-500">
-                                      {formatRelativeTime(contact.lastActivity.occurredAt)}
+                                    {" / "}
+                                    <span className={signals.dueTodayCount ? "text-orange-600 font-medium" : "text-gray-900"}>
+                                      Due today: {signals.dueTodayCount}
                                     </span>
-                                  </div>
+                                    {" / "}
+                                    <span className={signals.overdueCount ? "text-red-600 font-medium" : "text-gray-900"}>
+                                      Overdue: {signals.overdueCount}
+                                    </span>
+                                  </>
                                 ) : (
-                                  <div className="text-xs text-gray-400 italic">
-                                    No activity yet
-                                  </div>
+                                  <span className="text-gray-400">—</span>
                                 )}
                               </div>
                             </div>
-                          );
-                        })
-                      )}
-                    </div>
+
+                            {/* Last Activity - Polished with truncation */}
+                            <div className="mt-2 pt-2 border-t border-gray-100">
+                              {contact.lastActivity ? (
+                                <div className="text-xs text-gray-500">
+                                  <span className="font-medium text-gray-700 truncate block max-w-[80%]">
+                                    {getActivityLabel(contact.lastActivity.type)}
+                                  </span>
+                                  <span className="text-gray-500">
+                                    {formatRelativeTime(contact.lastActivity.occurredAt)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="text-xs text-gray-400 italic">
+                                  No activity yet
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
-              );
-            });
-          })()}
-          </div>
-        )}
-      </div>
+              </div>
+            );
+          });
+        })()}
+        </div>
+      )}
 
       {selectedContactForTask && (
         <AddTaskModal
@@ -774,6 +806,6 @@ export default function PipelinePage() {
           onTaskCreated={handleTaskCreated}
         />
       )}
-    </>
+    </AppShell>
   );
 }

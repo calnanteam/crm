@@ -5,9 +5,36 @@
 :root {
   --foreground-rgb: 0, 0, 0;
   --background-rgb: 255, 255, 255;
+  
+  /* Modern design tokens */
+  --surface-primary: 255, 255, 255;
+  --surface-secondary: 249, 250, 251;
+  --surface-tertiary: 243, 244, 246;
+  --border-primary: 229, 231, 235;
+  --border-secondary: 243, 244, 246;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: rgb(var(--background-rgb));
+@layer base {
+  body {
+    color: rgb(var(--foreground-rgb));
+    background: rgb(var(--surface-secondary));
+  }
+}
+
+@layer utilities {
+  .surface-primary {
+    background-color: rgb(var(--surface-primary));
+  }
+  
+  .surface-secondary {
+    background-color: rgb(var(--surface-secondary));
+  }
+  
+  .surface-tertiary {
+    background-color: rgb(var(--surface-tertiary));
+  }
+  
+  .border-subtle {
+    border-color: rgb(var(--border-secondary));
+  }
 }
